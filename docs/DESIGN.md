@@ -431,3 +431,23 @@ Wanted's official system language is practical, encouraging, and centered on hel
 | `AppSpacing.page / ctaHeight` | 24 / 56 | 화면 좌우 여백 / 큰 CTA 높이 |
 
 패턴: 회색 배경 위 흰 섹션 카드(그림자 없음), 누르면 0.98로 살짝 줄어드는 탭 영역(`Pressable`), 선택 칩은 알약 모양(`SelectChip`), 확인 다이얼로그는 나란한 두 버튼(`showConfirm`), PIN은 시스템 키보드 대신 화면 키패드(`PinPad`).
+
+## 다크 모드 기본 (2026-11-16)
+
+앱은 다크 모드로만 실행한다. 토큰 이름(역할)은 그대로 두고 `AppColors`의 값을 어두운 배경용으로 바꿨다. 위의 라이트 값(`colors`)은 원본 기준으로 남겨 둔다.
+
+| 토큰 | 다크 값 | 비고 |
+|---|---|---|
+| `canvas` | `#17171C` | 화면·카드 바탕 |
+| `groupedBackground` | `#0E0E12` | 그룹 화면 배경(카드보다 한 단계 어둡게) |
+| `fill` | `#26262D` | 입력칸·보조 버튼·칩 |
+| `elevated` (신설) | `#2C2C34` | 알림 배너, 내 주제 카드, 스낵바, 팝업 메뉴 |
+| `heading` / `body` | `#F4F5F7` / `#D4D6DB` | 글자 |
+| `secondary` / `tertiary` | `#9EA2AB` / `#6A6E78` | 메타데이터 / 비활성 |
+| `hairline` | `#2E2E36` | 구분선 |
+| `primary` | `#2F80FF` | 어두운 배경에서 글자로 읽히도록 #0066ff보다 밝게(대비 약 5:1). 역할은 같다: 행동·선택에만 |
+| `primarySoft` | `#16294D` | 선택 상태 배경 |
+| `error` | `#FF5D62` | |
+| `shadow` (신설) | `#000000` | 그림자는 항상 검정 |
+
+규칙: `heading`을 배경으로 쓰고 그 위에 흰 글자를 올리지 않는다(다크에서는 흰 바탕에 흰 글자가 된다). 띄울 면은 `elevated`, 강조 버튼은 `primary`를 쓴다. 내 채팅 말풍선은 `primary`. 상태바·내비게이션 바는 밝은 아이콘(`AppTheme.systemOverlay`), Android 시작 화면도 `#17171C`.

@@ -261,7 +261,7 @@ class _Bubble extends StatelessWidget {
           vertical: 10,
         ),
         decoration: BoxDecoration(
-          color: mine ? AppColors.heading : AppColors.fill,
+          color: mine ? AppColors.primary : AppColors.fill,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(AppRadius.menu),
             topRight: const Radius.circular(AppRadius.menu),

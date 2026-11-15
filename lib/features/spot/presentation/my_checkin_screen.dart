@@ -239,7 +239,10 @@ class MyCheckinScreen extends ConsumerWidget {
             background: AppColors.groupedBackground,
             child: FilledButton(
               onPressed: () => _checkOut(context, ref),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.heading),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.heading,
+                foregroundColor: AppColors.canvas,
+              ),
               child: const Text('체크아웃'),
             ),
           ),

@@ -315,7 +315,7 @@ class _MyCard extends StatelessWidget {
       ),
       child: Pressable(
         onTap: () => context.push(Routes.spotMe),
-        color: AppColors.heading,
+        color: AppColors.elevated,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg,
@@ -332,7 +332,7 @@ class _MyCard extends StatelessWidget {
                     Text(
                       cards.length > 1 ? '내 주제 ${cards.length}개' : '내 주제',
                       style: AppTypography.caption.copyWith(
-                        color: AppColors.tertiary,
+                        color: AppColors.secondary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -340,7 +340,7 @@ class _MyCard extends StatelessWidget {
                       Text(
                         c.topic,
                         style: AppTypography.subtitle.copyWith(
-                          color: AppColors.onPrimary,
+                          color: AppColors.heading,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -354,7 +354,7 @@ class _MyCard extends StatelessWidget {
                   Text(
                     TimeFormat.remaining(left),
                     style: AppTypography.body.copyWith(
-                      color: AppColors.onPrimary,
+                      color: AppColors.heading,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -362,14 +362,14 @@ class _MyCard extends StatelessWidget {
                   Text(
                     '체크인 관리',
                     style: AppTypography.caption.copyWith(
-                      color: AppColors.tertiary,
+                      color: AppColors.secondary,
                     ),
                   ),
                 ],
               ),
               const Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.tertiary,
+                color: AppColors.secondary,
               ),
             ],
           ),

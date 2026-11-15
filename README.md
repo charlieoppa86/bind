@@ -69,7 +69,7 @@ test/               흐름·단위 테스트
 
 - **스택**: Flutter, flutter_riverpod 3(`Notifier`), go_router(하단 탭 4개는 `StatefulShellRoute`), geolocator
 - **라우팅 가드**: `features/session/session.dart`의 세션 상태(로그인·온보딩·정지·체크인)로 화면을 나눕니다.
-- **디자인**: 색·글꼴·간격은 `AppColors` / `AppTypography` / `AppSpacing` / `AppRadius` 토큰만 씁니다. 숫자 규칙(30자, 200m, 30분 등)은 `AppLimits`에서 가져옵니다.
+- **디자인**: 다크 모드가 기본입니다. 색·글꼴·간격은 `AppColors` / `AppTypography` / `AppSpacing` / `AppRadius` 토큰만 씁니다. 숫자 규칙(30자, 200m, 30분 등)은 `AppLimits`에서 가져옵니다.
 
 ## 기획 문서
 

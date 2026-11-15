@@ -485,7 +485,7 @@ class StatusPill extends StatelessWidget {
     final (bg, fg) = switch (tone) {
       PillTone.neutral => (AppColors.fill, AppColors.body),
       PillTone.active => (AppColors.primarySoft, AppColors.primary),
-      PillTone.strong => (AppColors.heading, AppColors.onPrimary),
+      PillTone.strong => (AppColors.heading, AppColors.canvas),
       PillTone.muted => (AppColors.fill, AppColors.tertiary),
     };
     return Container(

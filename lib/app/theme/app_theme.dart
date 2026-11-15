@@ -1,18 +1,28 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app_colors.dart';
 import 'app_spacing.dart';
 import 'app_typography.dart';
 
-/// 앱 테마.
+/// 앱 테마. 기본은 다크 모드다.
 ///
 /// 색·글꼴은 docs/DESIGN.md 토큰을 따르고, 컨트롤 모양은 토스류 모바일 앱 패턴을 참고했다.
 /// - 테두리 대신 회색 면(fill)으로 입력칸·보조 버튼·칩을 구분한다.
 /// - 큰 CTA는 56px, 라운드 16. 바텀시트 상단 라운드 24.
 /// - 눌림은 #171719 state layer(+ 위젯 단의 살짝 줄어드는 스케일)로 표현한다.
 abstract final class AppTheme {
-  static ThemeData get light {
-    const colorScheme = ColorScheme.light(
+  /// 상태바·내비게이션 바: 어두운 바탕 + 밝은 아이콘
+  static const systemOverlay = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: AppColors.canvas,
+    systemNavigationBarIconBrightness: Brightness.light,
+  );
+
+  static ThemeData get dark {
+    const colorScheme = ColorScheme.dark(
       primary: AppColors.primary,
       onPrimary: AppColors.onPrimary,
       surface: AppColors.canvas,
@@ -48,6 +58,7 @@ abstract final class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      brightness: Brightness.dark,
       colorScheme: colorScheme,
       fontFamily: AppTypography.fontFamily,
       textTheme: AppTypography.textTheme,
@@ -61,6 +72,7 @@ abstract final class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: true,
         titleTextStyle: AppTypography.supportingTitle,
+        systemOverlayStyle: systemOverlay,
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.hairline,
@@ -231,10 +243,10 @@ abstract final class AppTheme {
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: AppColors.canvas,
         surfaceTintColor: Colors.transparent,
+        color: AppColors.elevated,
         elevation: 4,
-        shadowColor: AppColors.heading.withValues(alpha: 0.2),
+        shadowColor: AppColors.shadow.withValues(alpha: 0.5),
         textStyle: AppTypography.bodyLarge.copyWith(color: AppColors.heading),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppRadius.menu)),
@@ -304,7 +316,8 @@ abstract final class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.body,
+        backgroundColor: AppColors.elevated,
+        actionTextColor: AppColors.primary,
         elevation: 0,
         insetPadding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -313,7 +326,7 @@ abstract final class AppTheme {
           AppSpacing.md,
         ),
         contentTextStyle: AppTypography.body.copyWith(
-          color: AppColors.onPrimary,
+          color: AppColors.heading,
           fontWeight: FontWeight.w500,
         ),
         shape: const RoundedRectangleBorder(

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppColors.canvas: 앱은 다크 모드가 기본이라 시작 화면도 어둡게 -->
+    <color name="bind_background">#17171C</color>
+</resources>

@@ -76,8 +76,9 @@ class _NoticeBannerHostState extends ConsumerState<NoticeBannerHost> {
                     if ((d.primaryVelocity ?? 0) < 0) _hide();
                   },
                   child: Material(
-                    color: AppColors.heading,
-                    elevation: 0,
+                    color: AppColors.elevated,
+                    elevation: 6,
+                    shadowColor: AppColors.shadow,
                     borderRadius: BorderRadius.circular(AppRadius.menu),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(AppRadius.menu),
@@ -93,7 +94,7 @@ class _NoticeBannerHostState extends ConsumerState<NoticeBannerHost> {
                           children: [
                             const Icon(
                               Icons.notifications_none_rounded,
-                              color: AppColors.onPrimary,
+                              color: AppColors.primary,
                               size: 20,
                             ),
                             const SizedBox(width: AppSpacing.sm),
@@ -101,7 +102,7 @@ class _NoticeBannerHostState extends ConsumerState<NoticeBannerHost> {
                               child: Text(
                                 notice.message,
                                 style: AppTypography.body.copyWith(
-                                  color: AppColors.onPrimary,
+                                  color: AppColors.heading,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -112,7 +113,7 @@ class _NoticeBannerHostState extends ConsumerState<NoticeBannerHost> {
                               Text(
                                 notice.actionLabel ?? '보기',
                                 style: AppTypography.body.copyWith(
-                                  color: AppColors.onPrimary,
+                                  color: AppColors.primary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

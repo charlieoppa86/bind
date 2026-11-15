@@ -64,6 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _loading ? null : _signIn,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.heading,
+                        foregroundColor: AppColors.canvas,
                       ),
                       icon: const Icon(Icons.apple, size: 22),
                       label: const Text('Apple로 계속하기'),
@@ -129,7 +130,7 @@ class _GoogleLabel extends StatelessWidget {
           height: 24,
           alignment: Alignment.center,
           decoration: const BoxDecoration(
-            color: AppColors.canvas,
+            color: AppColors.onPrimary,
             shape: BoxShape.circle,
           ),
           child: Text(
@@ -174,11 +175,11 @@ class _CardPreview extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: AppColors.canvas,
+                      color: AppColors.elevated,
                       borderRadius: BorderRadius.circular(AppRadius.section),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.heading.withValues(alpha: 0.08),
+                          color: AppColors.shadow.withValues(alpha: 0.35),
                           blurRadius: 24,
                           offset: const Offset(0, 8),
                         ),
