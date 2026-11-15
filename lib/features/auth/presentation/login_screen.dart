@@ -47,7 +47,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
             PageHeader(
-              title: '지금 여기,\n같은 주제의 사람과\n바로 대화해요',
+              title: '같은 공간에서\n같은 관심사로',
               description:
                   '반경 ${AppLimits.roomRadiusMeters.round()}m 안에 있는 사람의 주제 한 줄을 보고\n수락받으면 1:1 대화가 열려요.',
               padding: const EdgeInsets.fromLTRB(
@@ -154,10 +154,12 @@ class _CardPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cards = [
-      ('도윤', JobTag.developer, 'Riverpod 3 마이그레이션 해보신 분?', -0.03, 0.0),
-      ('하린', JobTag.marketer, '1인 마케터 예산 배분 고민', 0.025, 28.0),
-      ('재현', JobTag.founder, 'MVP 검증 어떻게 하셨어요', -0.015, 6.0),
+    // (닉네임, 하는 일, 주제, 아바타, 기울기, 가로 위치)
+    final cards = [
+      ('도윤', JobTag.developer.label, 'AI 같이 공부해요', '🧑‍💻', -0.03, 0.0),
+      // 소개용 문구라 온보딩 직무 목록(JobTag)에 없는 '프리랜서'도 쓴다.
+      ('하린', '프리랜서', '가벼운 스몰톡이 하고 싶어요', '🙋‍♀️', 0.025, 28.0),
+      ('재현', JobTag.designer.label, '이직 고민이 있어요', '🧑‍💼', -0.015, 6.0),
     ];
     return LayoutBuilder(
       builder: (context, c) {
@@ -165,7 +167,8 @@ class _CardPreview extends StatelessWidget {
         if (h < 180) return const SizedBox.shrink();
         return Stack(
           children: [
-            for (final (i, (name, job, topic, angle, dx)) in cards.indexed)
+            for (final (i, (name, job, topic, emoji, angle, dx))
+                in cards.indexed)
               Positioned(
                 left: AppSpacing.page + dx,
                 right: AppSpacing.page + 28 - dx,
@@ -187,14 +190,14 @@ class _CardPreview extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        InitialAvatar(name, size: 36),
+                        _EmojiAvatar(emoji, index: i),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '$name · ${job.label}',
+                                '$name · $job',
                                 style: AppTypography.caption,
                               ),
                               const SizedBox(height: 2),
@@ -218,6 +221,31 @@ class _CardPreview extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// 소개용 일러스트 아바타(실제 사용자 사진이 아니다. 앱에서 프로필 사진은 받지 않는다)
+class _EmojiAvatar extends StatelessWidget {
+  const _EmojiAvatar(this.emoji, {required this.index});
+
+  final String emoji;
+  final int index;
+
+  static const _size = 40.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, _) = AppColors.avatarTints[index % AppColors.avatarTints.length];
+    return Container(
+      width: _size,
+      height: _size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: Text(
+        emoji,
+        style: const TextStyle(fontSize: _size * 0.55, height: 1),
+      ),
     );
   }
 }
