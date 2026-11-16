@@ -1,9 +1,13 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_limits.dart';
 import '../../core/utils/korean_search.dart';
 import '../demo/demo_seed.dart';
+import '../demo/demo_store.dart';
+import '../live/checkin_repository_provider.dart';
+import '../live/live_mode.dart';
 import '../models/place.dart';
 
 /// 장소 검색. 실제로는 카카오 로컬 "키워드로 장소 검색"을 쓴다.
@@ -68,5 +72,19 @@ final placeSearchResultsProvider = FutureProvider.autoDispose
       if (q.length < AppLimits.placeSearchMinLength) return const [];
       await Future<void>.delayed(AppLimits.placeSearchDebounce);
       if (!ref.mounted) return const [];
-      return ref.read(placeSearchProvider).search(q);
+      final places = await ref.read(placeSearchProvider).search(q);
+      // 실제 모드: 이미 열린 장소의 "지금 n명"을 붙이려고 장소 문서를 함께 읽는다.
+      if (ref.mounted && ref.read(liveModeProvider) && places.isNotEmpty) {
+        try {
+          final spots = await ref.read(checkinRepositoryProvider).fetchSpots([
+            for (final p in places) p.id,
+          ]);
+          if (ref.mounted) {
+            ref.read(demoStoreProvider.notifier).applySpots(spots);
+          }
+        } catch (e) {
+          debugPrint('[BIND] 장소 인원 조회 실패: $e');
+        }
+      }
+      return places;
     });

@@ -11,6 +11,7 @@ import '../../../core/constants/enums.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
+import '../../../data/live/live_sync.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../../data/models/chat.dart';
 import '../../safety/presentation/safety_menu.dart';
@@ -129,6 +130,8 @@ class _MessageList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 실제 모드: 이 방을 보는 동안만 메시지를 실시간으로 받는다.
+    ref.watch(chatMessagesSyncProvider(chatId));
     final messages = ref.watch(messagesProvider(chatId));
     if (messages.isEmpty) {
       return const EmptyState(
@@ -383,10 +386,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                   controller: _input,
                   minLines: 1,
                   maxLines: 4,
+                  maxLength: AppLimits.chatMessageMax,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _send(),
                   decoration: InputDecoration(
                     hintText: '메시지 보내기',
+                    counterText: '',
                     fillColor: AppColors.fill,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppRadius.full),

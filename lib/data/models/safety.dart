@@ -2,7 +2,7 @@ import '../../core/constants/enums.dart';
 import 'firestore_utils.dart';
 
 /// `reports/{reportId}` — 클라이언트는 생성만, 읽기 불가.
-/// Functions가 서로 다른 신고자 3명 누적 시 대상 계정을 정지한다.
+/// Functions가 서로 다른 신고자 `AppLimits.reportsUntilSuspension`명 누적 시 대상 계정을 정지한다.
 class Report {
   const Report({
     required this.reporterUid,

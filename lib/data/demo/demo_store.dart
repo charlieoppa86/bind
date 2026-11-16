@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/router/routes.dart';
@@ -12,6 +13,8 @@ import '../models/chat.dart';
 import '../models/chat_request.dart';
 import '../models/checkin.dart';
 import '../models/safety.dart';
+import '../live/checkin_repository_provider.dart';
+import '../live/live_mode.dart';
 import '../models/place.dart';
 import '../models/spot.dart';
 import 'demo_seed.dart';
@@ -86,7 +89,22 @@ class DemoDb {
     unread = u;
   }
 
+  /// 실제(Firebase) 모드: 더미 없이 비어서 시작하고 Firestore 데이터로 채운다.
+  DemoDb._empty()
+    : users = {},
+      spots = [],
+      checkins = [],
+      requests = [],
+      recentTopics = [] {
+    chats = [];
+    messages = {};
+    unread = {};
+  }
+
   static const myUid = DemoSeed.myUid;
+
+  /// 실제 모드에서 실시간으로 지켜보는 장소(이 장소 인원은 체크인 목록으로 센다)
+  String? liveSpotId;
 
   /// 묶음별 버전(바뀐 부분만 다시 그리기용)
   final DemoRev rev = DemoRev();
@@ -157,10 +175,15 @@ class DemoDb {
   ]..sort((a, b) => b.startedAt.compareTo(a.startedAt));
 
   /// 스팟에 지금 있는 사람 수(나 포함)
-  int headcount(String spotId, DateTime now) => {
-    for (final c in checkins)
-      if (c.spotId == spotId && c.isActiveAt(now)) c.uid,
-  }.length;
+  int headcount(String spotId, DateTime now) {
+    // 실제 모드에서 지켜보지 않는 장소는 서버가 센 인원(activeCount)을 쓴다.
+    final counted = spot(spotId)?.activeCount;
+    if (counted != null && spotId != liveSpotId) return counted;
+    return {
+      for (final c in checkins)
+        if (c.spotId == spotId && c.isActiveAt(now)) c.uid,
+    }.length;
+  }
 
   List<ChatRequest> received() => [
     for (final r in requests)
@@ -247,10 +270,159 @@ class DemoStore extends Notifier<DemoDb> {
       _timers.clear();
     });
     _timers.add(Timer.periodic(const Duration(seconds: 15), (_) => _tick()));
-    return DemoDb._seed(DateTime.now());
+    return ref.read(liveModeProvider)
+        ? DemoDb._empty()
+        : DemoDb._seed(DateTime.now());
   }
 
   DemoDb get _db => state;
+
+  /// 실제(Firebase) 모드. 바꾼 내용을 화면에 먼저 반영하고 Firestore에도 쓴다.
+  /// 더미 시나리오(상대 수락·도착 등)는 돌리지 않는다.
+  bool get _live => ref.read(liveModeProvider);
+
+  /// 실제 모드에서만 Firestore에 쓴다. 실패하면 알리고 [onFail]로 되돌린다.
+  void _remote(
+    Future<void> Function(CheckinRepository repo, String uid) write, {
+    void Function()? onFail,
+  }) {
+    if (!_live) return;
+    final uid = ref.read(sessionProvider).uid;
+    if (uid == null) return;
+    write(ref.read(checkinRepositoryProvider), uid).catchError((Object e) {
+      debugPrint('[BIND] 저장 실패: $e');
+      _notice('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      onFail?.call();
+    });
+  }
+
+  /// 실제 모드에서만 서버에 쓴다(차단·신고·평가 등). 실패하면 알린다.
+  void _liveWrite(Future<void> Function(String uid) write) {
+    if (!_live) return;
+    final uid = ref.read(sessionProvider).uid;
+    if (uid == null) return;
+    write(uid).catchError((Object e) {
+      debugPrint('[BIND] 저장 실패: $e');
+      _notice('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    });
+  }
+
+  /// 프로필을 아직 못 읽어 온 상대도 카드·요청에 있는 닉네임으로 찾는다.
+  String _nicknameOf(String uid) =>
+      _db.user(uid)?.nickname ??
+      _db.checkins.where((c) => c.uid == uid).firstOrNull?.nickname ??
+      _db.requests.where((r) => r.fromUid == uid).firstOrNull?.fromNickname ??
+      '알 수 없음';
+
+  /// 차단 목록(실제 모드: 서버 목록으로 통째로 바꾼다)
+  void applyBlocks(List<Block> blocks) {
+    _db.blocks
+      ..clear()
+      ..addAll({for (final b in blocks) b.targetUid: b});
+    _commit({DemoPart.blocks});
+  }
+
+  /// 내 프로필이 서버에서 바뀌었을 때(좋았어요 수·BIND+·정지)
+  void applyMe(AppUser profile) {
+    if (_db.me == null) return;
+    enter(profile);
+    if (profile.suspended) _session.suspend();
+  }
+
+  /// 내 체크인 중 서버에 저장된 것(서버 id)
+  Iterable<String> get _myRemoteIds => [
+    for (final c in _db.myCheckins(_now))
+      if (!c.id.startsWith('my-checkin')) c.id,
+  ];
+
+  // ── 실제 모드: Firestore 실시간 데이터 반영(LiveSync가 부른다) ──
+
+  /// 내 체크아웃 전 카드. 서버 목록으로 통째로 바꾼다.
+  void applyMyCheckins(List<Checkin> mine) {
+    _db.checkins
+      ..removeWhere((c) => c.uid == DemoDb.myUid)
+      ..addAll(mine);
+    _commit({DemoPart.checkins});
+    final first = mine.firstOrNull;
+    final session = ref.read(sessionProvider);
+    if (first == null) {
+      if (session.isCheckedIn) _session.checkedOut();
+    } else if (session.activeCheckinId != first.id) {
+      _session.checkedIn(checkinId: first.id, spotId: first.spotId);
+    }
+  }
+
+  /// 지켜보는 장소의 다른 사람 카드. null이면 지켜보기를 끝낸다.
+  void applySpotCheckins(String? spotId, List<Checkin> cards) {
+    final previous = _db.liveSpotId;
+    _db.liveSpotId = spotId;
+    _db.checkins.removeWhere(
+      (c) =>
+          c.uid != DemoDb.myUid && (c.spotId == spotId || c.spotId == previous),
+    );
+    _db.checkins.addAll([
+      for (final c in cards)
+        if (c.uid != DemoDb.myUid) c,
+    ]);
+    _commit({DemoPart.checkins});
+  }
+
+  /// 장소 정보(이름·인원)를 넣거나 바꾼다.
+  void applySpots(List<Spot> spots) {
+    if (spots.isEmpty) return;
+    for (final s in spots) {
+      final i = _db.spots.indexWhere((x) => x.id == s.id);
+      if (i < 0) {
+        _db.spots.add(s);
+      } else {
+        _db.spots[i] = s;
+      }
+    }
+    _commit({DemoPart.places, DemoPart.checkins});
+  }
+
+  /// 받은 요청(서버 목록으로 통째로 바꾼다)
+  void applyReceivedRequests(List<ChatRequest> received) {
+    _db.requests
+      ..removeWhere((r) => r.toUid == DemoDb.myUid)
+      ..addAll(received);
+    _commit({DemoPart.requests});
+  }
+
+  /// 보낸 요청. 서버 응답 전에 화면에 먼저 넣어 둔 요청(req-out-)은 지운다.
+  void applySentRequests(List<ChatRequest> sent) {
+    _db.requests
+      ..removeWhere((r) => r.fromUid == DemoDb.myUid)
+      ..addAll(sent);
+    _commit({DemoPart.requests});
+  }
+
+  /// 채팅방 목록 + 방마다 내 안 읽은 수
+  void applyChats(List<(Chat, int)> chats) {
+    _db.chats
+      ..clear()
+      ..addAll([for (final (c, _) in chats) c]);
+    _db.unread
+      ..clear()
+      ..addAll({for (final (c, n) in chats) c.id: n});
+    _commit({DemoPart.chats});
+  }
+
+  /// 상대 프로필(닉네임·하는 일·좋았어요 수)
+  void applyUsers(List<AppUser> users) {
+    if (users.isEmpty) return;
+    for (final u in users) {
+      _db.users[u.uid] = u;
+    }
+    _commit({DemoPart.profile, DemoPart.chats});
+  }
+
+  /// 로그아웃·탈퇴: 실제 모드 데이터를 비운다.
+  void clearLive() {
+    if (!_live) return;
+    state = DemoDb._empty();
+  }
+
   DateTime get _now => DateTime.now();
   SessionController get _session => ref.read(sessionProvider.notifier);
 
@@ -383,6 +555,13 @@ class DemoStore extends Notifier<DemoDb> {
       }
     }
     _commit({DemoPart.profile, DemoPart.checkins});
+    final me = _db.me;
+    if (me != null) {
+      final ids = _myRemoteIds.toList();
+      if (ids.isNotEmpty) {
+        _remote((repo, _) => repo.updateCardsProfile(ids, me));
+      }
+    }
   }
 
   Checkin _withProfile(Checkin c, AppUser me) => Checkin(
@@ -406,7 +585,7 @@ class DemoStore extends Notifier<DemoDb> {
       t.cancel();
     }
     _timers.removeRange(1, _timers.length);
-    state = DemoDb._seed(_now);
+    state = _live ? DemoDb._empty() : DemoDb._seed(_now);
     _session.signOut();
   }
 
@@ -416,7 +595,7 @@ class DemoStore extends Notifier<DemoDb> {
   // ── 체크인 ──────────────────────────────────────────
 
   /// 검색해서 고른 장소로 체크인한다. 같은 카카오 장소가 열려 있으면 거기로, 없으면 새로 연다.
-  /// TODO(firebase): spots/{placeId} 찾기/만들기(트랜잭션) + checkins 문서 생성
+  /// 실제 모드: spots/{placeId} 찾기·만들기 + checkins 문서 생성(한 트랜잭션)
   void checkIn({
     required Place place,
     required String topic,
@@ -447,12 +626,35 @@ class DemoStore extends Notifier<DemoDb> {
     }
     _commit({DemoPart.checkins, DemoPart.places, DemoPart.topics});
     _session.checkedIn(checkinId: checkin.id, spotId: spot.id);
-    _scheduleIncoming(checkin);
+    if (_live) {
+      _remote(
+        (repo, uid) => repo.checkIn(
+          uid: uid,
+          me: me,
+          place: place,
+          topic: topic.trim(),
+          category: category,
+        ),
+        onFail: () => _checkOutLocal(checkin.id),
+      );
+    } else {
+      _scheduleIncoming(checkin);
+    }
+  }
+
+  /// 서버 저장에 실패한 카드를 화면에서 내린다.
+  void _checkOutLocal(String checkinId) {
+    final i = _db.checkins.indexWhere((c) => c.id == checkinId);
+    if (i < 0) return;
+    _db.checkins[i] = _db.checkins[i].copyWith(checkedOutAt: _now);
+    _commit({DemoPart.checkins});
+    if (_db.myCheckins(_now).isEmpty) _session.checkedOut();
   }
 
   Spot _openSpot(Place place, DateTime now) {
+    // 장소 id = 카카오 장소 ID(실제 모드의 Firestore 문서 id와 같다)
     final spot = Spot(
-      id: _db.nextId('spot'),
+      id: place.id,
       placeId: place.id,
       name: place.name,
       address: place.address,
@@ -483,6 +685,15 @@ class DemoStore extends Notifier<DemoDb> {
     );
     _rememberTopic(topic.trim(), category);
     _commit({DemoPart.checkins, DemoPart.topics});
+    _remote(
+      (repo, uid) => repo.addTopic(
+        uid: uid,
+        me: me,
+        spotId: first.spotId,
+        topic: topic.trim(),
+        category: category,
+      ),
+    );
   }
 
   void updateTopic(String checkinId, String topic, TopicCategory category) {
@@ -494,6 +705,7 @@ class DemoStore extends Notifier<DemoDb> {
     );
     _rememberTopic(topic.trim(), category);
     _commit({DemoPart.checkins, DemoPart.topics});
+    _remote((repo, _) => repo.updateTopic(checkinId, topic.trim(), category));
   }
 
   void removeTopic(String checkinId) {
@@ -501,6 +713,7 @@ class DemoStore extends Notifier<DemoDb> {
     if (i < 0) return;
     _db.checkins[i] = _db.checkins[i].copyWith(checkedOutAt: _now);
     _commit({DemoPart.checkins});
+    _remote((repo, _) => repo.checkOutOne(checkinId));
   }
 
   void _rememberTopic(String topic, TopicCategory category) {
@@ -521,8 +734,10 @@ class DemoStore extends Notifier<DemoDb> {
   }
 
   void checkOut() {
+    final ids = _myRemoteIds.toList();
     _checkOutAll(_now);
     _commit({DemoPart.checkins});
+    _remote((repo, _) => repo.checkOutAll(ids));
   }
 
   void _checkOutAll(DateTime now) {
@@ -547,6 +762,12 @@ class DemoStore extends Notifier<DemoDb> {
       _db.checkins[i] = c.copyWith(notifyWhenSomeoneArrives: on);
     }
     _commit({DemoPart.checkins});
+    if (_live) {
+      // TODO(fcm): 첫 사람이 체크인하면 Functions가 푸시로 알린다.
+      final ids = _myRemoteIds.toList();
+      _remote((repo, _) => repo.setArrivalNotify(ids, on));
+      return;
+    }
     if (!on) return;
 
     final spotId = mine.first.spotId;
@@ -640,6 +861,74 @@ class DemoStore extends Notifier<DemoDb> {
   }
 
   // ── 요청 ────────────────────────────────────────────
+
+  /// 화면에서 부르는 요청 보내기. 실제 모드는 서버(sendRequest)가 최종 판단한다.
+  Future<SendRequestResult> requestChat(Checkin target, String message) async {
+    if (!_live) return sendRequest(target, message);
+    // 화면에 있는 값으로 먼저 걸러내고(빠른 안내), 서버가 다시 확인한다.
+    final now = _now;
+    if (_db.myCheckins(now).isEmpty) return SendRequestResult.notCheckedIn;
+    if (_db.pendingTo(target.uid) != null) return SendRequestResult.duplicate;
+    if (!_db.isPlusActive &&
+        _db.sentToday(now) >= AppLimits.freeDailyRequests) {
+      return SendRequestResult.dailyLimit;
+    }
+    final result = await ref
+        .read(requestRepositoryProvider)
+        .send(toCheckinId: target.id, message: message.trim());
+    return switch (result) {
+      RemoteSendResult.sent => SendRequestResult.sent,
+      RemoteSendResult.duplicate => SendRequestResult.duplicate,
+      RemoteSendResult.dailyLimit => SendRequestResult.dailyLimit,
+      RemoteSendResult.notCheckedIn ||
+      RemoteSendResult.gone => SendRequestResult.notCheckedIn,
+    };
+  }
+
+  /// 화면에서 부르는 수락·거절. 수락하면 채팅방 id.
+  /// 실제 모드는 서버(respondRequest)가 채팅방을 만든다.
+  Future<String?> respondTo(String requestId, {required bool accept}) async {
+    if (!_live) return respond(requestId, accept: accept);
+    final r = _db.request(requestId);
+    if (r == null) return null;
+    final chatId = await ref
+        .read(requestRepositoryProvider)
+        .respond(requestId, accept: accept);
+    // 서버 목록이 오기 전에 화면에 먼저 반영한다(바로 대화방으로 들어가도록).
+    final i = _db.requests.indexWhere((x) => x.id == requestId);
+    if (i >= 0) {
+      _db.requests[i] = r.copyWith(
+        status: chatId != null
+            ? ChatRequestStatus.accepted
+            : (accept ? ChatRequestStatus.expired : ChatRequestStatus.rejected),
+        chatId: chatId,
+      );
+    }
+    if (chatId != null && _db.chat(chatId) == null) {
+      final now = _now;
+      _db.chats.add(
+        Chat(
+          id: chatId,
+          memberUids: [r.fromUid, DemoDb.myUid],
+          createdAt: now,
+          expiresAt: now.add(AppLimits.chatRetention),
+          lastMessage: r.message,
+          lastMessageAt: now,
+        ),
+      );
+      _db.messages[chatId] = [
+        ChatMessage(
+          id: 'first-$chatId',
+          senderUid: r.fromUid,
+          text: r.message,
+          sentAt: r.createdAt,
+        ),
+      ];
+      _db.unread[chatId] = 0;
+    }
+    _commit({DemoPart.requests, DemoPart.chats});
+    return chatId;
+  }
 
   SendRequestResult sendRequest(Checkin target, String message) {
     final now = _now;
@@ -757,12 +1046,44 @@ class DemoStore extends Notifier<DemoDb> {
     if ((_db.unread[chatId] ?? 0) == 0) return;
     _db.unread[chatId] = 0;
     _commit({DemoPart.chats});
+    if (_live) {
+      final uid = ref.read(sessionProvider).uid;
+      if (uid != null) {
+        ref
+            .read(requestRepositoryProvider)
+            .markRead(chatId, uid)
+            .catchError((Object e) => debugPrint('[BIND] 읽음 처리 실패: $e'));
+      }
+    }
+  }
+
+  /// 대화방 메시지(실제 모드: 서버 목록으로 통째로 바꾼다)
+  void applyMessages(String chatId, List<ChatMessage> messages) {
+    _db.messages[chatId] = messages;
+    _commit({DemoPart.chats}, chatId: chatId);
   }
 
   void sendMessage(String chatId, String text) {
     final chat = _db.chat(chatId);
     if (chat == null || text.trim().isEmpty) return;
     _append(chatId, DemoDb.myUid, text.trim());
+    if (_live) {
+      final uid = ref.read(sessionProvider).uid;
+      if (uid == null) return;
+      ref
+          .read(requestRepositoryProvider)
+          .sendMessage(
+            chatId: chatId,
+            uid: uid,
+            text: text.trim(),
+            expiresAt: chat.expiresAt,
+          )
+          .catchError((Object e) {
+            debugPrint('[BIND] 메시지 전송 실패: $e');
+            _notice('메시지를 보내지 못했어요. 잠시 후 다시 시도해 주세요.');
+          });
+      return;
+    }
     final other = chat.otherUid(DemoDb.myUid);
     if (chat.leftUids.contains(other)) return;
     final reply = DemoSeed.replies[_replyCursor++ % DemoSeed.replies.length];
@@ -818,6 +1139,24 @@ class DemoStore extends Notifier<DemoDb> {
   void review(String chatId, ChatReviewRating? rating) {
     _db.reviewAsked.add(chatId);
     final chat = _db.chat(chatId);
+    if (_live) {
+      // 좋았어요 수는 서버(onReviewCreated)가 올린다.
+      if (chat != null && rating != null) {
+        final target = chat.otherUid(DemoDb.myUid);
+        _liveWrite(
+          (uid) => ref
+              .read(safetyRepositoryProvider)
+              .review(
+                uid: uid,
+                chatId: chatId,
+                targetUid: target,
+                rating: rating,
+              ),
+        );
+      }
+      _commit({DemoPart.chats});
+      return;
+    }
     if (chat != null && rating == ChatReviewRating.good) {
       final other = chat.otherUid(DemoDb.myUid);
       final u = _db.users[other];
@@ -831,22 +1170,43 @@ class DemoStore extends Notifier<DemoDb> {
   // ── 신고·차단 ───────────────────────────────────────
 
   void block(String uid) {
-    final u = _db.user(uid);
+    final nickname = _nicknameOf(uid);
     _db.blocks[uid] = Block(
       targetUid: uid,
-      targetNickname: u?.nickname ?? '알 수 없음',
+      targetNickname: nickname,
       createdAt: _now,
     );
     _commit({DemoPart.blocks});
+    _liveWrite(
+      (me) => ref.read(safetyRepositoryProvider).block(me, uid, nickname),
+    );
   }
 
   void unblock(String uid) {
     _db.blocks.remove(uid);
     _commit({DemoPart.blocks});
+    _liveWrite((me) => ref.read(safetyRepositoryProvider).unblock(me, uid));
   }
 
-  void report(String uid, ReportReason reason, {required bool alsoBlock}) {
+  /// 신고. 서로 다른 신고자가 쌓이면 서버(onReportCreated)가 정지한다.
+  void report(
+    String uid,
+    ReportReason reason, {
+    required bool alsoBlock,
+    ReportSource source = ReportSource.feed,
+  }) {
     _db.reportedUids.add(uid);
+    _liveWrite(
+      (me) => ref
+          .read(safetyRepositoryProvider)
+          .report(
+            uid: me,
+            targetUid: uid,
+            reason: reason,
+            source: source,
+            alsoBlocked: alsoBlock,
+          ),
+    );
     if (alsoBlock) {
       block(uid);
     } else {

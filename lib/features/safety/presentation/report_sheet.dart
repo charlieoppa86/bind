@@ -32,7 +32,12 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
     // TODO(firebase): reports 문서 생성 (+ users/{me}/blocks)
     ref
         .read(demoStoreProvider.notifier)
-        .report(widget.targetId, _reason!, alsoBlock: _alsoBlock);
+        .report(
+          widget.targetId,
+          _reason!,
+          alsoBlock: _alsoBlock,
+          source: widget.source ?? ReportSource.feed,
+        );
     context.pop(ReportOutcome(blocked: _alsoBlock));
   }
 

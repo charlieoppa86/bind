@@ -23,8 +23,8 @@ class Checkin {
 
   factory Checkin.fromMap(String id, Map<String, dynamic> map) => Checkin(
     id: id,
-    uid: map['uid'] as String,
-    spotId: map['spotId'] as String,
+    uid: map['uid'] as String? ?? '',
+    spotId: map['spotId'] as String? ?? '',
     nickname: map['nickname'] as String? ?? '',
     jobTag: enumByName(JobTag.values, map['jobTag'], JobTag.other),
     jobCustom: map['jobCustom'] as String?,
@@ -60,6 +60,22 @@ class Checkin {
 
   /// 체류 시간 제한이 없다. 체크아웃 전까지 보인다.
   bool isActiveAt(DateTime now) => checkedOutAt == null;
+
+  /// 같은 카드를 다른 uid로(실제 모드에서 내 uid를 앱 안 별칭으로 바꿀 때)
+  Checkin withUid(String uid) => Checkin(
+    id: id,
+    uid: uid,
+    spotId: spotId,
+    nickname: nickname,
+    jobTag: jobTag,
+    jobCustom: jobCustom,
+    topic: topic,
+    category: category,
+    startedAt: startedAt,
+    checkedOutAt: checkedOutAt,
+    hasTrustBadge: hasTrustBadge,
+    notifyWhenSomeoneArrives: notifyWhenSomeoneArrives,
+  );
 
   Checkin copyWith({
     String? topic,

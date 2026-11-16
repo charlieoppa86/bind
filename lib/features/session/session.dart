@@ -51,10 +51,15 @@ class SessionController extends Notifier<Session> {
   @override
   Session build() => const Session();
 
+  /// 로그인 완료. 같은 사람이면 먼저 불러 둔 체크인 상태는 그대로 둔다
+  /// (앱을 다시 켰을 때 체크인 중이면 바로 피드로 가도록).
   void signedIn({required String uid, required bool isOnboarded}) {
+    final keep = state.uid == null || state.uid == uid;
     state = Session(
       status: isOnboarded ? SessionStatus.ready : SessionStatus.needsOnboarding,
       uid: uid,
+      activeCheckinId: keep ? state.activeCheckinId : null,
+      activeSpotId: keep ? state.activeSpotId : null,
     );
   }
 

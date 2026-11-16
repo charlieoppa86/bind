@@ -24,6 +24,7 @@ class ChatRequestSheet extends ConsumerStatefulWidget {
 
 class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
   final _controller = TextEditingController();
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -43,13 +44,26 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
               .firstOrNull;
     if (target == null) return;
 
-    // TODO(firebase): chatRequests 문서 생성 + 상대에게 FCM
-    final result = ref
-        .read(demoStoreProvider.notifier)
-        .sendRequest(target, _controller.text);
     final messenger = ScaffoldMessenger.of(context);
+    final SendRequestResult result;
+    setState(() => _sending = true);
+    try {
+      result = await ref
+          .read(demoStoreProvider.notifier)
+          .requestChat(target, _controller.text);
+    } catch (e) {
+      debugPrint('[BIND] 요청 보내기 실패: $e');
+      if (mounted) setState(() => _sending = false);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('요청을 보내지 못했어요. 잠시 후 다시 시도해 주세요.')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _sending = false);
     switch (result) {
       case SendRequestResult.sent:
+        if (!context.mounted) return;
         context.pop();
         messenger.showSnackBar(
           SnackBar(
@@ -60,6 +74,7 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
           ),
         );
       case SendRequestResult.dailyLimit:
+        if (!context.mounted) return;
         await showPlusPrompt(
           context,
           reason: '무료로는 하루 ${AppLimits.freeDailyRequests}번까지 요청할 수 있어요.',
@@ -200,7 +215,8 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
               valueListenable: _controller,
               builder: (_, value, _) => FilledButton(
                 onPressed:
-                    pending == null &&
+                    !_sending &&
+                        pending == null &&
                         value.text.trim().length >= AppLimits.requestMessageMin
                     ? _send
                     : null,

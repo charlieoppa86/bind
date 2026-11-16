@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// BIND Firestore 보안 규칙 (1단계: 로그인·프로필·닉네임)
+// BIND Firestore 보안 규칙 (1단계: 로그인·프로필·닉네임, 2-1: 장소·체크인, 2-2: 요청, 2-3: 채팅, 2-4: 차단·신고·평가)
 // - 신뢰가 필요한 값(좋았어요 수, 신고·정지, BIND+ 만료)은 클라이언트가 못 쓴다.
 //   Cloud Functions(Admin SDK)만 쓴다. Admin SDK는 규칙을 거치지 않는다.
 // - 체크인·요청·채팅 컬렉션은 2단계에서 규칙을 연다(지금은 모두 거부).
@@ -62,6 +62,17 @@ service cloud.firestore {
 
       // 탈퇴는 Functions(deleteAccount)가 한다.
       allow delete: if false;
+
+      // 2-4. 내 차단 목록 — 나만 읽고 쓴다.
+      match /blocks/{targetUid} {
+        allow read, delete: if isMe(uid);
+        allow create: if isMe(uid)
+          && targetUid != uid
+          && request.resource.data.keys().hasOnly(['targetNickname', 'createdAt'])
+          && request.resource.data.targetNickname is string
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+      }
     }
 
     // nicknames/{nicknameKey} = { uid } — 같은 닉네임은 한 사람만
@@ -74,7 +85,150 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // 2단계에서 체크인·요청·채팅 규칙을 연다.
+    // ── 2-1. 장소·체크인 ──────────────────────────────
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function validTopic(data) {
+      return data.topic is string
+        && data.topic.size() >= 1 && data.topic.size() <= 30   // AppLimits.topicMaxLength
+        && data.category is string;
+    }
+
+    // spots/{카카오 장소 ID} — 처음 체크인하는 사람이 만든다. 인원(activeCount)은 Functions만 쓴다.
+    match /spots/{placeId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['placeId', 'name', 'address',
+             'category', 'lat', 'lng', 'creatorUid', 'createdAt'])
+        && request.resource.data.placeId == placeId
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // checkins/{id} — 내 주제 카드. 같은 장소 사람(로그인 사용자)이 읽는다.
+    match /checkins/{checkinId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'spotId', 'nickname',
+             'jobTag', 'jobCustom', 'topic', 'category', 'startedAt',
+             'checkedOutAt', 'hasTrustBadge', 'notifyWhenSomeoneArrives'])
+        && request.resource.data.uid == request.auth.uid
+        // 같은 트랜잭션에서 장소를 만들 수 있어 existsAfter로 본다.
+        && existsAfter(/databases/$(database)/documents/spots/$(request.resource.data.spotId))
+        && !myProfile().get('suspended', false)
+        && request.resource.data.nickname == myProfile().nickname
+        && request.resource.data.jobTag == myProfile().jobTag
+        && validTopic(request.resource.data)
+        && request.resource.data.startedAt == request.time
+        && request.resource.data.checkedOutAt == null
+        && request.resource.data.notifyWhenSomeoneArrives == false
+        // 신뢰 표시는 서버가 센 "좋았어요" 수로만(AppLimits.trustBadgeThreshold)
+        && request.resource.data.hasTrustBadge
+             == (myProfile().get('goodReviewCount', 0) >= 5);
+
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && resource.data.checkedOutAt == null   // 내린 카드는 바꾸지 못한다
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['topic', 'category', 'checkedOutAt',
+                       'notifyWhenSomeoneArrives', 'nickname', 'jobTag', 'jobCustom'])
+        && validTopic(request.resource.data)
+        && (request.resource.data.checkedOutAt == null
+            || request.resource.data.checkedOutAt == request.time)
+        && request.resource.data.nickname == myProfile().nickname;
+
+      allow delete: if false;
+    }
+
+    // ── 2-2. 대화 요청·채팅방 ─────────────────────────
+    // 만들기·수락·거절·만료는 모두 Functions(sendRequest/respondRequest/expireRequests).
+
+    match /chatRequests/{requestId} {
+      allow read: if signedIn()
+        && (resource.data.fromUid == request.auth.uid
+            || resource.data.toUid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── 2-3. 채팅 ─────────────────────────────────────
+    // 방 만들기는 Functions. 마지막 메시지·안 읽은 수·메시지 수도 Functions(onMessageCreated).
+    // 앱은 메시지 쓰기와 "내 안 읽은 수 0으로"만 한다.
+    match /chats/{chatId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.memberUids;
+
+      // 읽음 처리: unread 안의 내 값만 0으로
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.memberUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unread'])
+        && request.resource.data.unread.diff(resource.data.unread).affectedKeys()
+             .hasOnly([request.auth.uid])
+        && request.resource.data.unread[request.auth.uid] == 0;
+
+      allow create, delete: if false;
+
+      // 2-4. 대화 평가 — 방마다 한 번, 평가자는 서로 비공개(읽기 불가).
+      //     좋았어요 수는 Functions(onReviewCreated)가 올린다.
+      match /reviews/{reviewerUid} {
+        allow read, update, delete: if false;
+        allow create: if isMe(reviewerUid)
+          && request.auth.uid in chat().memberUids
+          && request.resource.data.keys().hasOnly(['targetUid', 'rating', 'createdAt'])
+          && request.resource.data.targetUid in chat().memberUids
+          && request.resource.data.targetUid != request.auth.uid
+          && request.resource.data.rating in ['good', 'soso']
+          && request.resource.data.createdAt == request.time;
+      }
+
+      function chat() {
+        return get(/databases/$(database)/documents/chats/$(chatId)).data;
+      }
+
+      match /messages/{messageId} {
+        allow read: if signedIn() && request.auth.uid in chat().memberUids;
+
+        allow create: if signedIn()
+          && request.auth.uid in chat().memberUids
+          && request.resource.data.keys().hasOnly(['senderUid', 'text', 'sentAt', 'expiresAt'])
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 1000   // AppLimits.chatMessageMax
+          && request.resource.data.sentAt == request.time
+          // 보관 기간이 지난 방, 누가 떠난 방에는 보낼 수 없다.
+          && chat().expiresAt > request.time
+          && chat().get('leftUids', []).size() == 0
+          // TTL로 방과 함께 지워지도록 방의 만료 시각을 그대로 쓴다.
+          && request.resource.data.expiresAt == chat().expiresAt;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // ── 2-4. 신고 ─────────────────────────────────────
+    // 만들기만 가능(읽기 불가). 문서 id = 신고자_대상 → 같은 사람을 여러 번 신고해도 1건.
+    // 서로 다른 신고자가 쌓이면 Functions(onReportCreated)가 정지한다.
+    match /reports/{reportId} {
+      allow read, update, delete: if false;
+      allow create: if signedIn()
+        && reportId == request.auth.uid + '_' + request.resource.data.targetUid
+        && request.resource.data.keys().hasOnly(['reporterUid', 'targetUid',
+             'reason', 'source', 'alsoBlocked', 'createdAt'])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.targetUid != request.auth.uid
+        && request.resource.data.reason in ['sales', 'dating', 'religion', 'abuse', 'other']
+        && request.resource.data.source in ['feed', 'request', 'chat']
+        && request.resource.data.alsoBlocked is bool
+        && request.resource.data.createdAt == request.time;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

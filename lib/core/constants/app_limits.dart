@@ -15,6 +15,9 @@ abstract final class AppLimits {
   static const requestMessageMin = 1;
   static const requestMessageMax = 40;
 
+  /// 채팅 메시지 한 개 최대 글자 수
+  static const chatMessageMax = 1000;
+
   /// US-007 요청 무응답 자동 만료
   static const requestExpiry = Duration(minutes: 30);
 

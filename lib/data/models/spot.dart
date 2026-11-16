@@ -15,6 +15,7 @@ class Spot {
     this.creatorUid,
     this.createdAt,
     this.active = true,
+    this.activeCount,
   });
 
   factory Spot.fromMap(String id, Map<String, dynamic> map) => Spot(
@@ -25,6 +26,7 @@ class Spot {
     category: map['category'] as String? ?? '',
     creatorUid: map['creatorUid'] as String?,
     active: map['active'] as bool? ?? true,
+    activeCount: map['activeCount'] as int? ?? 0,
   );
 
   final String id;
@@ -39,6 +41,10 @@ class Spot {
   final String? creatorUid;
   final DateTime? createdAt;
   final bool active;
+
+  /// 지금 체크인한 사람 수. Cloud Functions가 갱신한다(실제 모드).
+  /// 데모 모드에서는 null이고, 인원은 체크인 목록으로 센다.
+  final int? activeCount;
 
   /// 빠른 선택 칩에서 다시 고를 때 쓰는 검색 결과 모양
   Place toPlace() =>

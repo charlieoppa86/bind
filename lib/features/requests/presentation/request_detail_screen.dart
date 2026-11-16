@@ -19,6 +19,37 @@ class RequestDetailScreen extends ConsumerWidget {
 
   final String requestId;
 
+  /// 수락하면 대화방으로, 거절하면 이전 화면으로. 실제 모드는 서버가 처리한다.
+  Future<void> _respond(
+    BuildContext context,
+    WidgetRef ref,
+    String id,
+    bool accept,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final String? chatId;
+    try {
+      chatId = await ref
+          .read(demoStoreProvider.notifier)
+          .respondTo(id, accept: accept);
+    } catch (e) {
+      debugPrint('[BIND] 요청 응답 실패: $e');
+      messenger.showSnackBar(
+        const SnackBar(content: Text('처리하지 못했어요. 잠시 후 다시 시도해 주세요.')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    if (accept && chatId != null) {
+      context.go(Routes.chatRoom(chatId));
+    } else if (accept) {
+      messenger.showSnackBar(const SnackBar(content: Text('시간이 지나 끝난 요청이에요')));
+    } else {
+      context.pop();
+      messenger.showSnackBar(const SnackBar(content: Text('요청을 거절했어요')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final r = ref.watch(requestProvider(requestId));
@@ -148,16 +179,7 @@ class RequestDetailScreen extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () {
-                        // TODO(firebase): chatRequests/{id}.status = rejected
-                        ref
-                            .read(demoStoreProvider.notifier)
-                            .respond(r.id, accept: false);
-                        context.pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('요청을 거절했어요')),
-                        );
-                      },
+                      onPressed: () => _respond(context, ref, r.id, false),
                       child: const Text('거절'),
                     ),
                   ),
@@ -165,13 +187,7 @@ class RequestDetailScreen extends ConsumerWidget {
                   Expanded(
                     flex: 2,
                     child: FilledButton(
-                      onPressed: () {
-                        // TODO(firebase): 수락 → Functions가 chats 문서 생성
-                        final chatId = ref
-                            .read(demoStoreProvider.notifier)
-                            .respond(r.id, accept: true);
-                        if (chatId != null) context.go(Routes.chatRoom(chatId));
-                      },
+                      onPressed: () => _respond(context, ref, r.id, true),
                       child: const Text('수락하고 대화 시작'),
                     ),
                   ),

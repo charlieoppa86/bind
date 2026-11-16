@@ -25,8 +25,8 @@ class ChatRequest {
   factory ChatRequest.fromMap(String id, Map<String, dynamic> map) =>
       ChatRequest(
         id: id,
-        fromUid: map['fromUid'] as String,
-        toUid: map['toUid'] as String,
+        fromUid: map['fromUid'] as String? ?? '',
+        toUid: map['toUid'] as String? ?? '',
         spotId: map['spotId'] as String? ?? '',
         toCheckinId: map['toCheckinId'] as String? ?? '',
         message: map['message'] as String? ?? '',

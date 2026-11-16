@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/enums.dart';
 import '../../data/account/account_repository.dart';
 import '../../data/demo/demo_store.dart';
+import '../../data/live/live_mode.dart';
+import '../../data/live/live_sync.dart';
 import 'session.dart';
 
 /// 로그인·온보딩·프로필 수정·로그아웃·탈퇴의 진입점.
@@ -44,6 +46,11 @@ class AccountController {
   Future<void> _enter(String uid) async {
     final profile = await _repo.loadProfile(uid);
     if (!_isDemo) _store.enter(profile);
+    // 실제 모드: 내 체크인·피드를 실시간으로 받기 시작한다. 첫 응답을 받은 뒤
+    // 로그인 상태로 바꿔야, 체크인 중이면 라우터가 바로 피드로 보낸다.
+    if (_ref.read(liveModeProvider)) {
+      await _ref.read(liveSyncProvider).start(uid);
+    }
     final onboarded = _ref.read(demoStoreProvider).me != null;
     _session.signedIn(uid: uid, isOnboarded: onboarded);
     if (profile?.suspended ?? false) _session.suspend();
@@ -83,12 +90,15 @@ class AccountController {
   }
 
   Future<void> signOut() async {
+    _ref.read(liveSyncProvider).stop();
     await _repo.signOut();
     if (!_isDemo) _store.enter(null);
+    _store.clearLive();
     _store.signOut();
   }
 
   Future<void> deleteAccount() async {
+    _ref.read(liveSyncProvider).stop();
     await _repo.deleteAccount();
     _store.deleteAccount();
   }

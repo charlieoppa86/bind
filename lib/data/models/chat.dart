@@ -73,7 +73,7 @@ class ChatMessage {
   factory ChatMessage.fromMap(String id, Map<String, dynamic> map) =>
       ChatMessage(
         id: id,
-        senderUid: map['senderUid'] as String,
+        senderUid: map['senderUid'] as String? ?? '',
         text: map['text'] as String? ?? '',
         sentAt: toDateTime(map['sentAt']) ?? DateTime.now(),
       );
