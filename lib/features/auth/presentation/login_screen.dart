@@ -13,6 +13,7 @@ import '../../../core/widgets/google_sign_in_button.dart';
 import '../../../core/notice/in_app_notice.dart';
 import '../../../data/account/account_repository.dart';
 import '../../session/account_controller.dart';
+import '../../../core/constants/brand.dart';
 
 /// 인증 > 로그인 (US-001). Android: 구글 / iOS: 구글·애플
 class LoginScreen extends ConsumerStatefulWidget {
@@ -65,13 +66,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const BindLogo(size: 32),
                   const SizedBox(height: AppSpacing.lg),
                   const Text(
-                    '같은 공간에서\n같은 관심사로',
+                    Brand.sloganTwoLines,
                     style: AppTypography.display,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    '지금 있는 장소를 고르고 주제 한 줄을 올리면\n같은 장소 사람과 대화를 나눌 수 있어요.',
+                    Brand.startCall,
                     style: AppTypography.bodyLarge.copyWith(
                       color: AppColors.secondary,
                     ),

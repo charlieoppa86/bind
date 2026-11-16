@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../data/demo/demo_providers.dart';
 
-/// 하단 탭 4개: 체크인 · 채팅 · 요청함 · 마이페이지
+/// 하단 탭 4개: 체크인 · 채팅 · 요청 · 마이페이지
 /// (순서는 app_router.dart의 StatefulShellBranch 순서와 같아야 한다)
 ///
 /// 셸은 아무것도 구독하지 않는다. 숫자 배지만 각자 자기 숫자를 구독해서
@@ -44,7 +44,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
             NavigationDestination(
               icon: _RequestsBadge(Icons.inbox_outlined),
               selectedIcon: _RequestsBadge(Icons.inbox),
-              label: '요청함',
+              label: '요청',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline),

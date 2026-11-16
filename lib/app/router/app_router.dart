@@ -192,7 +192,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // 탭 3: 요청함
+          // 탭 3: 요청
           StatefulShellBranch(
             initialLocation: Routes.requestsReceived,
             routes: [

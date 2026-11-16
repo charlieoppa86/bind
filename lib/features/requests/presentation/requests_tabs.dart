@@ -30,7 +30,7 @@ class _RequestsTabsScaffold extends StatelessWidget {
         appBar: AppBar(
           centerTitle: false,
           titleSpacing: AppSpacing.page,
-          title: const Text('요청함', style: AppTypography.title),
+          title: const Text('요청', style: AppTypography.title),
           bottom: TabBar(
             onTap: (i) {
               if (i == index) return;

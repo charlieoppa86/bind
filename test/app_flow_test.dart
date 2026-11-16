@@ -1,4 +1,5 @@
 import 'package:bind_app/app/app.dart';
+import 'package:bind_app/core/constants/brand.dart';
 import 'package:bind_app/core/widgets/bind_logo.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +17,8 @@ void main() {
     // 스플래시 → 로그인
     await tester.pump(const Duration(milliseconds: 700));
     await tester.pumpAndSettle();
+    expect(find.text(Brand.sloganTwoLines), findsOneWidget); // 첫 화면 슬로건
+    expect(find.text(Brand.startCall), findsOneWidget); // 그 아래 설명
     await tester.tap(find.text('Google로 로그인'));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
@@ -84,7 +87,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 받은 요청 수락 → 대화방
-    await tester.tap(find.text('요청함'));
+    await tester.tap(find.text('요청').last);
     await tester.pumpAndSettle();
     expect(find.text('저도 같은 고민 중이라 얘기 나눠보고 싶어요!'), findsOneWidget);
     await tester.tap(find.text('저도 같은 고민 중이라 얘기 나눠보고 싶어요!'));
