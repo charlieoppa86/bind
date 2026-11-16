@@ -1,4 +1,4 @@
-package com.bindapp.bind_app
+package app.bind.mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

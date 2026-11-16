@@ -7,7 +7,7 @@ import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/topic_content.dart';
 import '../../../core/utils/time_format.dart';
-import '../../../data/demo/demo_store.dart';
+import '../../../data/demo/demo_providers.dart';
 
 /// 마이 > 마이 > 동의 내역 (US-003 AC3)
 class ConsentHistoryScreen extends ConsumerWidget {
@@ -15,7 +15,7 @@ class ConsentHistoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final at = ref.watch(demoStoreProvider).me?.consentedAt;
+    final at = ref.watch(meProvider.select((m) => m?.consentedAt));
     return Scaffold(
       appBar: AppBar(title: const Text('동의 내역')),
       body: ListView(
@@ -28,7 +28,7 @@ class ConsentHistoryScreen extends ConsumerWidget {
             style: AppTypography.caption,
           ),
           const SizedBox(height: AppSpacing.lg),
-          _Item(text: '만 ${AppLimits.minimumAge}세 이상이에요'),
+          const _Item(text: '만 ${AppLimits.minimumAge}세 이상이에요'),
           for (final rule in communityRules) _Item(text: rule),
         ],
       ),

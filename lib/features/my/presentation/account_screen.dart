@@ -7,7 +7,10 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
+import '../../../core/notice/in_app_notice.dart';
+import '../../session/account_controller.dart';
 
 /// 마이 > 마이 > 계정
 class AccountScreen extends ConsumerWidget {
@@ -24,13 +27,19 @@ class AccountScreen extends ConsumerWidget {
       destructive: true,
     );
     if (ok != true) return;
-    // TODO(firebase): Functions로 계정 삭제
-    ref.read(demoStoreProvider.notifier).deleteAccount();
+    try {
+      await ref.read(accountProvider).deleteAccount();
+    } catch (e) {
+      debugPrint('[BIND] 탈퇴 실패: $e');
+      ref
+          .read(inAppNoticeProvider.notifier)
+          .show(const InAppNotice('탈퇴를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final me = ref.watch(demoStoreProvider).me;
+    final me = ref.watch(meProvider);
     final isIos = defaultTargetPlatform == TargetPlatform.iOS;
     return Scaffold(
       backgroundColor: AppColors.groupedBackground,
@@ -71,7 +80,7 @@ class AccountScreen extends ConsumerWidget {
               children: [
                 ListRow(
                   title: '로그아웃',
-                  onTap: () => ref.read(demoStoreProvider.notifier).signOut(),
+                  onTap: () => ref.read(accountProvider).signOut(),
                 ),
                 ListRow(
                   title: '탈퇴하기',

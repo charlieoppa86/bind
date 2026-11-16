@@ -2,6 +2,7 @@ import 'package:bind_app/app/app.dart';
 import 'package:bind_app/app/router/app_router.dart';
 import 'package:bind_app/app/router/routes.dart';
 import 'package:bind_app/core/constants/enums.dart';
+import 'package:bind_app/data/demo/demo_seed.dart';
 import 'package:bind_app/data/demo/demo_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +23,11 @@ void main() {
       ..signIn()
       ..saveDraftProfile('지후', JobTag.developer)
       ..completeOnboarding()
-      ..checkIn(placeName: '성수 워크라운지', topic: 't', category: TopicCategory.dev);
+      ..checkIn(
+        place: DemoSeed.places[0],
+        topic: 't',
+        category: TopicCategory.dev,
+      );
     await tester.pumpAndSettle();
     container.read(routerProvider).go(Routes.my);
     await tester.pumpAndSettle();

@@ -10,8 +10,10 @@ import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/topic_content.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../data/demo/demo_store.dart';
 import 'profile_form.dart';
+import '../../../core/notice/in_app_notice.dart';
+import '../../../data/account/account_repository.dart';
+import '../../session/account_controller.dart';
 
 /// 인증 > 온보딩 > 연령·규칙 동의 (US-003)
 class ConsentScreen extends ConsumerStatefulWidget {
@@ -27,10 +29,25 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
 
   bool get _allAgreed => _agreed.every((a) => a);
 
-  void _complete() {
+  bool _saving = false;
+
+  Future<void> _complete() async {
     HapticFeedback.mediumImpact();
-    ref.read(demoStoreProvider.notifier).completeOnboarding();
-    context.go(Routes.onboardingGuide);
+    setState(() => _saving = true);
+    final notice = ref.read(inAppNoticeProvider.notifier);
+    try {
+      await ref.read(accountProvider).completeOnboarding();
+      if (mounted) context.go(Routes.onboardingGuide);
+    } on NicknameTakenException {
+      // 그 사이 다른 사람이 같은 닉네임으로 가입했다 → 닉네임 다시 정하기
+      notice.show(const InAppNotice('방금 다른 분이 같은 닉네임을 가져갔어요. 다른 닉네임을 골라주세요.'));
+      if (mounted) context.pop();
+    } catch (e) {
+      debugPrint('[BIND] 가입 완료 실패: $e');
+      notice.show(const InAppNotice('저장하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -89,7 +106,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                             AppRadius.section,
                           ),
                         ),
-                        child: Text(
+                        child: const Text(
                           'BIND는 만 ${AppLimits.minimumAge}세 이상만 이용할 수 있어요.\n'
                           '낯선 사람과의 1:1 대화로부터 보호하기 위해 가입을 진행할 수 없어요.',
                           style: AppTypography.bodyLarge,
@@ -173,12 +190,11 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
           BottomCta(
             child: _isAdult == false
                 ? OutlinedButton(
-                    onPressed: () =>
-                        ref.read(demoStoreProvider.notifier).signOut(),
+                    onPressed: () => ref.read(accountProvider).signOut(),
                     child: const Text('처음으로 돌아가기'),
                   )
                 : FilledButton(
-                    onPressed: _isAdult == true && _allAgreed
+                    onPressed: _isAdult == true && _allAgreed && !_saving
                         ? _complete
                         : null,
                     child: const Text('동의하고 가입 완료'),

@@ -11,19 +11,27 @@ abstract final class AppLimits {
   // US-005 주제 한 줄
   static const topicMaxLength = 30;
 
-  // US-007 대화 신청 한 마디
+  // US-007 대화 요청 한 마디
   static const requestMessageMin = 1;
   static const requestMessageMax = 40;
 
-  /// US-007 신청 무응답 자동 만료
+  /// US-007 요청 무응답 자동 만료
   static const requestExpiry = Duration(minutes: 30);
 
   /// US-009 / US-012 대화 보관 기간
   static const chatRetention = Duration(days: 7);
 
-  /// 장소 이름 길이(자유 입력)
-  static const placeNameMin = 2;
-  static const placeNameMax = 20;
+  /// 장소 검색(카카오 로컬): 이 글자 수부터 검색한다
+  static const placeSearchMinLength = 2;
+
+  /// 장소 검색어 최대 길이
+  static const placeSearchMaxLength = 30;
+
+  /// 입력이 이만큼 멈추면 검색한다(요청 수 줄이기)
+  static const placeSearchDebounce = Duration(milliseconds: 300);
+
+  /// 검색 결과 최대 개수(카카오 한 페이지 최대 15)
+  static const placeSearchMaxResults = 15;
 
   /// 체크인 화면의 "최근 간 장소" 개수
   static const recentPlacesCount = 3;

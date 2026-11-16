@@ -409,7 +409,7 @@ class BottomCta extends StatelessWidget {
   }
 }
 
-/// 숫자 배지(안 읽은 메시지·대기 중 신청)
+/// 숫자 배지(안 읽은 메시지·대기 중 요청)
 class CountBadge extends StatelessWidget {
   const CountBadge(this.count, {super.key});
 

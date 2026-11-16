@@ -60,7 +60,7 @@ class ChatRequest {
   final JobTag fromJobTag;
   final String? fromJobCustom;
 
-  /// 화면에 보이는 신청자의 하는 일. 기타를 고르고 직접 입력했으면 그 글자.
+  /// 화면에 보이는 요청자의 하는 일. 기타를 고르고 직접 입력했으면 그 글자.
   String get fromJobLabel => jobLabelOf(fromJobTag, fromJobCustom);
   final String? chatId;
 

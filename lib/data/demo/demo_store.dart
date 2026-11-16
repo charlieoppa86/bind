@@ -6,13 +6,13 @@ import '../../app/router/routes.dart';
 import '../../core/constants/app_limits.dart';
 import '../../core/constants/enums.dart';
 import '../../core/notice/in_app_notice.dart';
-import '../../core/utils/korean_search.dart';
 import '../../features/session/session.dart';
 import '../models/app_user.dart';
 import '../models/chat.dart';
 import '../models/chat_request.dart';
 import '../models/checkin.dart';
 import '../models/safety.dart';
+import '../models/place.dart';
 import '../models/spot.dart';
 import 'demo_seed.dart';
 
@@ -20,8 +20,59 @@ import 'demo_seed.dart';
 ///
 /// Firebase 연결 전까지 Firestore 컬렉션(`spots`, `checkins`, `chatRequests`,
 /// `chats`, `users/{uid}/blocks`)과 Cloud Functions가 하는 일
-/// (코드 검증, 신청 만료, 채팅방 생성)을 흉내 낸다.
+/// (코드 검증, 요청 만료, 채팅방 생성)을 흉내 낸다.
 /// 상대방의 수락·답장·체크인은 [DemoSeed]의 시나리오대로 몇 초 뒤 일어난다.
+/// 저장소 안의 데이터 묶음. 바뀐 묶음의 버전만 올려서,
+/// 그 묶음을 구독하는 위젯만 다시 그리게 한다(`demo_providers.dart`).
+enum DemoPart {
+  /// 내 프로필·온보딩 임시값·BIND+
+  profile,
+
+  /// 장소 목록·최근 간 장소
+  places,
+
+  /// 체크인(주제 카드)
+  checkins,
+
+  /// 대화 요청
+  requests,
+
+  /// 대화방 목록·안 읽은 수·평가
+  chats,
+
+  /// 차단
+  blocks,
+
+  /// 최근 쓴 주제
+  topics,
+}
+
+/// 묶음별 버전. 값은 앱 전체에서 한 번도 겹치지 않게 올린다
+/// (탈퇴로 저장소를 새로 만들어도 이전 값과 같아지지 않도록).
+class DemoRev {
+  DemoRev() {
+    for (final p in DemoPart.values) {
+      _parts[p] = ++_counter;
+    }
+  }
+
+  static int _counter = 0;
+  final Map<DemoPart, int> _parts = {};
+  final Map<String, int> _chats = {};
+
+  int of(DemoPart part) => _parts[part]!;
+
+  /// 대화방 하나의 메시지 버전
+  int chat(String chatId) => _chats[chatId] ?? 0;
+
+  void bump(Iterable<DemoPart> parts, {String? chatId}) {
+    for (final p in parts) {
+      _parts[p] = ++_counter;
+    }
+    if (chatId != null) _chats[chatId] = ++_counter;
+  }
+}
+
 class DemoDb {
   DemoDb._seed(DateTime now)
     : users = {for (final u in DemoSeed.users) u.uid: u},
@@ -36,6 +87,9 @@ class DemoDb {
   }
 
   static const myUid = DemoSeed.myUid;
+
+  /// 묶음별 버전(바뀐 부분만 다시 그리기용)
+  final DemoRev rev = DemoRev();
 
   /// 온보딩을 마치기 전에는 null
   AppUser? me;
@@ -73,23 +127,15 @@ class DemoDb {
 
   bool isCreator(String spotId) => spot(spotId)?.creatorUid == myUid;
 
-  /// 입력한 이름과 같은 장소(띄어쓰기·대소문자 무시)
-  Spot? spotByName(String name) {
-    final key = Spot.keyOf(name);
-    return spots.where((s) => s.active && s.key == key).firstOrNull;
-  }
-
-  /// 장소 이름 자동완성: 이미 누군가 입력한 장소 중 비슷한 것, 사람 많은 순
-  List<Spot> suggestSpots(String query, DateTime now) => [
-    for (final s in spots)
-      if (s.active && KoreanSearch.matches(s.name, query)) s,
-  ]..sort((a, b) => headcount(b.id, now).compareTo(headcount(a.id, now)));
+  /// 이 카카오 장소로 이미 열린 장소(같은 장소 판정)
+  Spot? spotByPlaceId(String placeId) =>
+      spots.where((s) => s.active && s.placeId == placeId).firstOrNull;
 
   /// 지금 사람이 있는 장소(사람 많은 순)
   List<Spot> activeSpots(DateTime now) => [
-    for (final s in suggestSpots('', now))
-      if (headcount(s.id, now) > 0) s,
-  ];
+    for (final s in spots)
+      if (s.active && headcount(s.id, now) > 0) s,
+  ]..sort((a, b) => headcount(b.id, now).compareTo(headcount(a.id, now)));
 
   List<Spot> get recentSpots => [for (final id in recentSpotIds) ?spot(id)];
 
@@ -208,7 +254,11 @@ class DemoStore extends Notifier<DemoDb> {
   DateTime get _now => DateTime.now();
   SessionController get _session => ref.read(sessionProvider.notifier);
 
-  void _commit() => ref.notifyListeners();
+  /// 바뀐 묶음의 버전을 올리고 알린다. 각 파생 provider는 자기 묶음 버전만 본다.
+  void _commit(Set<DemoPart> parts, {String? chatId}) {
+    _db.rev.bump(parts, chatId: chatId);
+    ref.notifyListeners();
+  }
 
   void _notice(String message, {String? actionLabel, String? route}) => ref
       .read(inAppNoticeProvider.notifier)
@@ -223,23 +273,26 @@ class DemoStore extends Notifier<DemoDb> {
     _timers.add(t);
   }
 
-  /// 15초마다: 신청 만료(30분) 처리.
+  /// 15초마다: 요청 만료(30분) 처리.
   /// 실제 서비스에서는 Cloud Functions 스케줄러가 한다.
   void _tick() {
     final now = _now;
+    var changed = false;
     for (final (i, r) in _db.requests.indexed.toList()) {
       if (r.status == ChatRequestStatus.pending && now.isAfter(r.expiresAt)) {
+        changed = true;
         _db.requests[i] = r.copyWith(status: ChatRequestStatus.expired);
         if (r.fromUid == DemoDb.myUid) {
           _notice(
-            '${_db.user(r.toUid)?.nickname}님이 답하지 않아 신청이 끝났어요',
+            '${_db.user(r.toUid)?.nickname}님이 답하지 않아 요청이 끝났어요',
             actionLabel: '보기',
             route: Routes.requestsSent,
           );
         }
       }
     }
-    _commit();
+    // 남은 시간 표시는 clockProvider가 맡으므로, 실제로 바뀐 게 있을 때만 알린다.
+    if (changed) _commit({DemoPart.requests});
   }
 
   // ── 인증·온보딩 ─────────────────────────────────────
@@ -254,10 +307,39 @@ class DemoStore extends Notifier<DemoDb> {
         ..draftNickname = null
         ..draftJobTag = null
         ..draftJobCustom = null;
-      _commit();
+      _commit({DemoPart.profile});
     }
     _session.signOut();
   }
+
+  /// 서버에서 불러온 내 프로필로 바꾼다(Firebase 모드). null이면 온보딩 전.
+  /// 데모 데이터 안에서는 내 uid를 [DemoDb.myUid]로 통일해 쓴다.
+  void enter(AppUser? profile) {
+    _db.me = profile == null
+        ? null
+        : AppUser(
+            uid: DemoDb.myUid,
+            nickname: profile.nickname,
+            jobTag: profile.jobTag,
+            jobCustom: profile.jobCustom,
+            consentedAt: profile.consentedAt,
+            goodReviewCount: profile.goodReviewCount,
+            isPlus: profile.isPlus,
+            plusExpiresAt: profile.plusExpiresAt,
+            suspended: profile.suspended,
+            onboardingGuideSeen: profile.onboardingGuideSeen,
+          );
+    _commit({DemoPart.profile});
+  }
+
+  /// 온보딩 1단계에서 입력한 값으로 만든 프로필(서버 저장용, 실제 uid)
+  AppUser draftUser(String uid) => AppUser(
+    uid: uid,
+    nickname: _db.draftNickname ?? '',
+    jobTag: _db.draftJobTag ?? JobTag.other,
+    jobCustom: _db.draftJobCustom,
+    consentedAt: _now,
+  );
 
   bool isNicknameTaken(String nickname) {
     final n = nickname.trim();
@@ -269,7 +351,7 @@ class DemoStore extends Notifier<DemoDb> {
       ..draftNickname = nickname.trim()
       ..draftJobTag = jobTag
       ..draftJobCustom = jobTag == JobTag.other ? jobCustom?.trim() : null;
-    _commit();
+    _commit({DemoPart.profile});
   }
 
   void completeOnboarding() {
@@ -280,13 +362,13 @@ class DemoStore extends Notifier<DemoDb> {
       jobCustom: _db.draftJobCustom,
       consentedAt: _now,
     );
-    _commit();
+    _commit({DemoPart.profile});
     _session.completeOnboarding();
   }
 
   void markGuideSeen() {
     _db.me = _db.me?.copyWith(onboardingGuideSeen: true);
-    _commit();
+    _commit({DemoPart.profile});
   }
 
   void updateProfile(String nickname, JobTag jobTag, {String? jobCustom}) {
@@ -300,7 +382,7 @@ class DemoStore extends Notifier<DemoDb> {
         _db.checkins[i] = _withProfile(c, _db.me!);
       }
     }
-    _commit();
+    _commit({DemoPart.profile, DemoPart.checkins});
   }
 
   Checkin _withProfile(Checkin c, AppUser me) => Checkin(
@@ -333,16 +415,16 @@ class DemoStore extends Notifier<DemoDb> {
 
   // ── 체크인 ──────────────────────────────────────────
 
-  /// 장소 이름을 입력해 체크인한다. 같은 이름의 장소가 있으면 거기로, 없으면 새로 연다.
-  /// TODO(firebase): spots(이름 키로 찾기/만들기) + checkins 문서 생성
+  /// 검색해서 고른 장소로 체크인한다. 같은 카카오 장소가 열려 있으면 거기로, 없으면 새로 연다.
+  /// TODO(firebase): spots/{placeId} 찾기/만들기(트랜잭션) + checkins 문서 생성
   void checkIn({
-    required String placeName,
+    required Place place,
     required String topic,
     required TopicCategory category,
   }) {
     final me = _db.me!;
     final now = _now;
-    final spot = _db.spotByName(placeName) ?? _openSpot(placeName, now);
+    final spot = _db.spotByPlaceId(place.id) ?? _openSpot(place, now);
     final checkin = Checkin(
       id: _db.nextId('my-checkin'),
       uid: DemoDb.myUid,
@@ -363,15 +445,18 @@ class DemoStore extends Notifier<DemoDb> {
     if (_db.recentSpotIds.length > AppLimits.recentPlacesCount) {
       _db.recentSpotIds.removeLast();
     }
-    _commit();
+    _commit({DemoPart.checkins, DemoPart.places, DemoPart.topics});
     _session.checkedIn(checkinId: checkin.id, spotId: spot.id);
     _scheduleIncoming(checkin);
   }
 
-  Spot _openSpot(String name, DateTime now) {
+  Spot _openSpot(Place place, DateTime now) {
     final spot = Spot(
       id: _db.nextId('spot'),
-      name: name.trim(),
+      placeId: place.id,
+      name: place.name,
+      address: place.address,
+      category: place.category,
       creatorUid: DemoDb.myUid,
       createdAt: now,
     );
@@ -397,7 +482,7 @@ class DemoStore extends Notifier<DemoDb> {
       ),
     );
     _rememberTopic(topic.trim(), category);
-    _commit();
+    _commit({DemoPart.checkins, DemoPart.topics});
   }
 
   void updateTopic(String checkinId, String topic, TopicCategory category) {
@@ -408,14 +493,14 @@ class DemoStore extends Notifier<DemoDb> {
       category: category,
     );
     _rememberTopic(topic.trim(), category);
-    _commit();
+    _commit({DemoPart.checkins, DemoPart.topics});
   }
 
   void removeTopic(String checkinId) {
     final i = _db.checkins.indexWhere((c) => c.id == checkinId);
     if (i < 0) return;
     _db.checkins[i] = _db.checkins[i].copyWith(checkedOutAt: _now);
-    _commit();
+    _commit({DemoPart.checkins});
   }
 
   void _rememberTopic(String topic, TopicCategory category) {
@@ -432,12 +517,12 @@ class DemoStore extends Notifier<DemoDb> {
 
   void deleteRecentTopic(String topic) {
     _db.recentTopics.removeWhere((t) => t.$1 == topic);
-    _commit();
+    _commit({DemoPart.topics});
   }
 
   void checkOut() {
     _checkOutAll(_now);
-    _commit();
+    _commit({DemoPart.checkins});
   }
 
   void _checkOutAll(DateTime now) {
@@ -461,7 +546,7 @@ class DemoStore extends Notifier<DemoDb> {
       final i = _db.checkins.indexOf(c);
       _db.checkins[i] = c.copyWith(notifyWhenSomeoneArrives: on);
     }
-    _commit();
+    _commit({DemoPart.checkins});
     if (!on) return;
 
     final spotId = mine.first.spotId;
@@ -491,7 +576,7 @@ class DemoStore extends Notifier<DemoDb> {
           notifyWhenSomeoneArrives: false,
         );
       }
-      _commit();
+      _commit({DemoPart.checkins});
       _notice(
         '${u.nickname}님이 체크인했어요: "$topic"',
         actionLabel: '보기',
@@ -500,7 +585,7 @@ class DemoStore extends Notifier<DemoDb> {
     });
   }
 
-  /// 체크인 직후 같은 스팟 사람이 나에게 신청을 보낸다(데모 시나리오).
+  /// 체크인 직후 같은 스팟 사람이 나에게 요청을 보낸다(데모 시나리오).
   void _scheduleIncoming(Checkin mine) {
     final people = [
       for (final (uid, _, _) in DemoSeed.incomingRequests)
@@ -521,7 +606,7 @@ class DemoStore extends Notifier<DemoDb> {
       if (uid == null) continue;
       _later(delay, () {
         final active = _db.myCheckins(_now);
-        // 이미 대화 중이거나 내가 먼저 신청한 사람이면 보내지 않는다.
+        // 이미 대화 중이거나 내가 먼저 요청한 사람이면 보내지 않는다.
         if (active.isEmpty ||
             _db.isBlocked(uid) ||
             _db.chatWith(uid, _now) != null ||
@@ -544,9 +629,9 @@ class DemoStore extends Notifier<DemoDb> {
           fromJobTag: from.jobTag,
         );
         _db.requests.add(req);
-        _commit();
+        _commit({DemoPart.requests});
         _notice(
-          '${from.nickname}님이 대화를 신청했어요',
+          '${from.nickname}님이 대화를 요청했어요',
           actionLabel: '보기',
           route: Routes.requestDetail(req.id),
         );
@@ -554,7 +639,7 @@ class DemoStore extends Notifier<DemoDb> {
     }
   }
 
-  // ── 신청 ────────────────────────────────────────────
+  // ── 요청 ────────────────────────────────────────────
 
   SendRequestResult sendRequest(Checkin target, String message) {
     final now = _now;
@@ -581,7 +666,7 @@ class DemoStore extends Notifier<DemoDb> {
       fromJobCustom: me.jobCustom,
     );
     _db.requests.add(req);
-    _commit();
+    _commit({DemoPart.requests});
 
     _later(DemoSeed.responseDelay, () {
       final current = _db.request(req.id);
@@ -592,7 +677,7 @@ class DemoStore extends Notifier<DemoDb> {
       final i = _db.requests.indexOf(current);
       if (DemoSeed.rejectingUids.contains(target.uid)) {
         _db.requests[i] = current.copyWith(status: ChatRequestStatus.rejected);
-        _commit();
+        _commit({DemoPart.requests});
         _notice(
           '${other.nickname}님은 이번엔 어렵대요',
           actionLabel: '보기',
@@ -605,9 +690,9 @@ class DemoStore extends Notifier<DemoDb> {
         status: ChatRequestStatus.accepted,
         chatId: chatId,
       );
-      _commit();
+      _commit({DemoPart.requests, DemoPart.chats});
       _notice(
-        '${other.nickname}님이 신청을 수락했어요',
+        '${other.nickname}님이 대화 요청을 수락했어요',
         actionLabel: '대화하기',
         route: Routes.chatRoom(chatId),
       );
@@ -619,14 +704,14 @@ class DemoStore extends Notifier<DemoDb> {
     return SendRequestResult.sent;
   }
 
-  /// 받은 신청 수락 → 채팅방 id, 거절 → null
+  /// 받은 요청 수락 → 채팅방 id, 거절 → null
   String? respond(String requestId, {required bool accept}) {
     final r = _db.request(requestId);
     if (r == null || r.status != ChatRequestStatus.pending) return r?.chatId;
     final i = _db.requests.indexOf(r);
     if (!accept) {
       _db.requests[i] = r.copyWith(status: ChatRequestStatus.rejected);
-      _commit();
+      _commit({DemoPart.requests});
       return null;
     }
     final chatId =
@@ -636,7 +721,7 @@ class DemoStore extends Notifier<DemoDb> {
       status: ChatRequestStatus.accepted,
       chatId: chatId,
     );
-    _commit();
+    _commit({DemoPart.requests, DemoPart.chats});
     return chatId;
   }
 
@@ -671,7 +756,7 @@ class DemoStore extends Notifier<DemoDb> {
   void openChat(String chatId) {
     if ((_db.unread[chatId] ?? 0) == 0) return;
     _db.unread[chatId] = 0;
-    _commit();
+    _commit({DemoPart.chats});
   }
 
   void sendMessage(String chatId, String text) {
@@ -691,7 +776,7 @@ class DemoStore extends Notifier<DemoDb> {
     if (_db.isBlocked(other)) return;
     _append(chatId, other, text);
     _db.unread[chatId] = (_db.unread[chatId] ?? 0) + 1;
-    _commit();
+    _commit({DemoPart.chats}, chatId: chatId);
   }
 
   void _append(String chatId, String sender, String text) {
@@ -716,7 +801,7 @@ class DemoStore extends Notifier<DemoDb> {
         sender: (c.messageCounts[sender] ?? 0) + 1,
       },
     );
-    _commit();
+    _commit({DemoPart.chats}, chatId: chatId);
   }
 
   /// 대화방을 나갈 때 평가를 물어볼지(한 번만, 양쪽 모두 말했을 때)
@@ -740,7 +825,7 @@ class DemoStore extends Notifier<DemoDb> {
         _db.users[other] = u.copyWith(goodReviewCount: u.goodReviewCount + 1);
       }
     }
-    _commit();
+    _commit({DemoPart.chats});
   }
 
   // ── 신고·차단 ───────────────────────────────────────
@@ -752,12 +837,12 @@ class DemoStore extends Notifier<DemoDb> {
       targetNickname: u?.nickname ?? '알 수 없음',
       createdAt: _now,
     );
-    _commit();
+    _commit({DemoPart.blocks});
   }
 
   void unblock(String uid) {
     _db.blocks.remove(uid);
-    _commit();
+    _commit({DemoPart.blocks});
   }
 
   void report(String uid, ReportReason reason, {required bool alsoBlock}) {
@@ -765,7 +850,7 @@ class DemoStore extends Notifier<DemoDb> {
     if (alsoBlock) {
       block(uid);
     } else {
-      _commit();
+      _commit({DemoPart.blocks});
     }
   }
 
@@ -778,13 +863,13 @@ class DemoStore extends Notifier<DemoDb> {
         plusExpiresAt: () => _now.add(AppLimits.plusPeriod),
       )
       ..plusAutoRenew = true;
-    _commit();
+    _commit({DemoPart.profile});
   }
 
   /// 해지해도 결제한 기간까지는 혜택 유지(US-019)
   void cancelPlus() {
     _db.plusAutoRenew = false;
-    _commit();
+    _commit({DemoPart.profile});
   }
 }
 

@@ -10,7 +10,9 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/bind_logo.dart';
 import '../../../core/widgets/emoji_avatar.dart';
 import '../../../core/widgets/google_sign_in_button.dart';
-import '../../../data/demo/demo_store.dart';
+import '../../../core/notice/in_app_notice.dart';
+import '../../../data/account/account_repository.dart';
+import '../../session/account_controller.dart';
 
 /// 인증 > 로그인 (US-001). Android: 구글 / iOS: 구글·애플
 class LoginScreen extends ConsumerStatefulWidget {
@@ -24,11 +26,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _loading = false;
 
   Future<void> _signIn() async {
-    // TODO(auth): google_sign_in / sign_in_with_apple + FirebaseAuth
+    // TODO(auth): iOS는 sign_in_with_apple도 추가
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    ref.read(demoStoreProvider.notifier).signIn();
+    try {
+      await ref.read(accountProvider).signIn();
+    } on NoGoogleAccountException {
+      ref
+          .read(inAppNoticeProvider.notifier)
+          .show(
+            const InAppNotice(
+              '이 기기에 로그인된 Google 계정이 없어요. 설정 > 계정에서 Google 계정을 추가한 뒤 다시 시도해 주세요.',
+            ),
+          );
+    } catch (e, st) {
+      debugPrint('[BIND] 로그인 실패: $e\n$st');
+      ref
+          .read(inAppNoticeProvider.notifier)
+          .show(const InAppNotice('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -54,7 +71,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    '지금 있는 장소를 적고 주제 한 줄을 올리면\n같은 장소 사람과 대화를 나눌 수 있어요.',
+                    '지금 있는 장소를 고르고 주제 한 줄을 올리면\n같은 장소 사람과 대화를 나눌 수 있어요.',
                     style: AppTypography.bodyLarge.copyWith(
                       color: AppColors.secondary,
                     ),

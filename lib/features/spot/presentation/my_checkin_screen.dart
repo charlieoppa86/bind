@@ -10,6 +10,7 @@ import '../../../core/constants/app_limits.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../my/presentation/plus_prompt.dart';
 
@@ -46,7 +47,7 @@ class MyCheckinScreen extends ConsumerWidget {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('주제는 최대 ${AppLimits.plusActiveTopics}개까지 올릴 수 있어요.'),
         ),
       );
@@ -55,9 +56,8 @@ class MyCheckinScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(demoStoreProvider);
-    final now = DateTime.now();
-    final mine = db.myCheckins(now);
+    final mine = ref.watch(myCheckinsProvider);
+    final topicLimit = ref.watch(topicLimitProvider);
     if (mine.isEmpty) {
       // 체크아웃된 경우: 이 화면을 떠난다.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -66,8 +66,6 @@ class MyCheckinScreen extends ConsumerWidget {
       return const Scaffold();
     }
     final first = mine.first;
-    final spot = db.spot(first.spotId);
-    final others = db.headcount(first.spotId, now) - 1;
 
     return Scaffold(
       backgroundColor: AppColors.groupedBackground,
@@ -85,37 +83,15 @@ class MyCheckinScreen extends ConsumerWidget {
                 bottom: AppSpacing.xl,
               ),
               children: [
-                SectionCard(
-                  padding: const EdgeInsets.all(AppSpacing.page),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      MetaLabel(
-                        '${TimeFormat.clock(first.startedAt)}부터 체크인 중',
-                        icon: Icons.place_outlined,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(spot?.name ?? '', style: AppTypography.display),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        others > 0
-                            ? '나 말고 $others명이 같은 장소에 있어요'
-                            : '아직 같은 장소에 다른 사람이 없어요',
-                        style: AppTypography.body.copyWith(
-                          color: AppColors.secondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _PlaceCard(spotId: first.spotId, startedAt: first.startedAt),
                 SectionLabel(
-                  '내 주제 ${mine.length}/${db.topicLimit}',
+                  '내 주제 ${mine.length}/$topicLimit',
                   trailing: TextButton.icon(
                     onPressed: () => _addTopic(
                       context,
                       mine.length,
-                      db.topicLimit,
-                      db.isPlusActive,
+                      topicLimit,
+                      ref.read(isPlusActiveProvider),
                     ),
                     icon: const Icon(Icons.add_rounded, size: 18),
                     label: const Text('주제 추가'),
@@ -177,10 +153,8 @@ class MyCheckinScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.page,
-                  ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.page),
                   child: Text(
                     '같은 장소 사람들에게는 닉네임·하는 일·주제만 보여요.',
                     style: AppTypography.caption,
@@ -199,6 +173,39 @@ class MyCheckinScreen extends ConsumerWidget {
               ),
               child: const Text('체크아웃'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 장소 이름 + 같은 장소 인원(인원 수가 바뀌면 이 카드만 다시 그린다)
+class _PlaceCard extends ConsumerWidget {
+  const _PlaceCard({required this.spotId, required this.startedAt});
+
+  final String spotId;
+  final DateTime startedAt;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final name = ref.watch(spotProvider(spotId).select((s) => s?.name ?? ''));
+    final others = ref.watch(headcountProvider(spotId)) - 1;
+    return SectionCard(
+      padding: const EdgeInsets.all(AppSpacing.page),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MetaLabel(
+            '${TimeFormat.clock(startedAt)}부터 체크인 중',
+            icon: Icons.place_outlined,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(name, style: AppTypography.display),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            others > 0 ? '나 말고 $others명이 같은 장소에 있어요' : '아직 같은 장소에 다른 사람이 없어요',
+            style: AppTypography.body.copyWith(color: AppColors.secondary),
           ),
         ],
       ),

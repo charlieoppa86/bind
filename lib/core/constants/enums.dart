@@ -98,7 +98,7 @@ enum ReportReason {
   final String label;
 }
 
-/// 대화 신청 상태 (US-007, US-008).
+/// 대화 요청 상태 (US-007, US-008).
 enum ChatRequestStatus { pending, accepted, rejected, expired }
 
 /// 대화 평가 (US-017).

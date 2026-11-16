@@ -10,6 +10,7 @@ import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/constants/topic_content.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 
 /// 체크인 > 주제 수정·추가 (US-005, US-014, US-016)
@@ -81,8 +82,13 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final db = ref.watch(demoStoreProvider);
-    final spot = db.spot(db.myCheckins(DateTime.now()).firstOrNull?.spotId);
+    final spotId = ref.watch(mySpotIdProvider);
+    final spotName = spotId == null
+        ? null
+        : ref.watch(spotProvider(spotId).select((s) => s?.name));
+    final recentTopics = widget.editId == null
+        ? ref.watch(recentTopicsProvider)
+        : const <(String, TopicCategory)>[];
     final title = widget.editId != null ? '주제 수정' : '주제 추가';
 
     return Scaffold(
@@ -104,9 +110,9 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
                     top: AppSpacing.sm,
                     bottom: AppSpacing.xl - 8,
                   ),
-                  eyebrow: spot == null
+                  eyebrow: spotName == null
                       ? null
-                      : MetaLabel(spot.name, icon: Icons.place_outlined),
+                      : MetaLabel(spotName, icon: Icons.place_outlined),
                   title: '$title할 내용을\n적어 주세요',
                 ),
                 const _Label('카테고리'),
@@ -147,10 +153,9 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
                         ? '카테고리를 고르면 예시도 볼 수 있어요'
                         : '예) ${topicExamples[_category!]!.first}',
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
 
-                if (widget.editId == null && db.recentTopics.isNotEmpty) ...[
+                if (recentTopics.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     '최근 쓴 주제',
@@ -159,7 +164,7 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  for (final (topic, category) in db.recentTopics)
+                  for (final (topic, category) in recentTopics)
                     _RecentTopicTile(
                       topic: topic,
                       category: category,
@@ -176,9 +181,13 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
             ),
           ),
           BottomCta(
-            child: FilledButton(
-              onPressed: _valid ? _submit : null,
-              child: Text(widget.editId != null ? '저장' : '주제 추가'),
+            // 글자를 칠 때는 이 버튼만 다시 그린다.
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _topic,
+              builder: (_, _, _) => FilledButton(
+                onPressed: _valid ? _submit : null,
+                child: Text(widget.editId != null ? '저장' : '주제 추가'),
+              ),
             ),
           ),
         ],

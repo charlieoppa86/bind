@@ -5,3 +5,12 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+
+linter:
+  rules:
+    # 정적 위젯은 const로: 다시 그릴 때 같은 인스턴스를 재사용해 리빌드를 건너뛴다.
+    - prefer_const_constructors
+    - prefer_const_constructors_in_immutables
+    - prefer_const_declarations
+    - prefer_const_literals_to_create_immutables
+    - unnecessary_const

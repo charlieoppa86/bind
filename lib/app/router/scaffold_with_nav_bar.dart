@@ -2,23 +2,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../data/demo/demo_store.dart';
+import '../../data/demo/demo_providers.dart';
 
-/// 하단 탭 4개: 스팟 · 신청함 · 채팅 · 마이
-class ScaffoldWithNavBar extends ConsumerWidget {
+/// 하단 탭 4개: 스팟 · 요청함 · 채팅 · 마이
+///
+/// 셸은 아무것도 구독하지 않는다. 숫자 배지만 각자 자기 숫자를 구독해서
+/// 요청·메시지가 와도 배지 아이콘만 다시 그린다.
+class ScaffoldWithNavBar extends StatelessWidget {
   const ScaffoldWithNavBar({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(demoStoreProvider);
-    final pending = db.pendingReceivedCount;
-    final unread = db.unreadTotal(DateTime.now());
-
-    Widget badge(int count, Widget icon) =>
-        Badge(isLabelVisible: count > 0, label: Text('$count'), child: icon);
-
+  Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: DecoratedBox(
@@ -33,23 +29,23 @@ class ScaffoldWithNavBar extends ConsumerWidget {
             i,
             initialLocation: i == navigationShell.currentIndex,
           ),
-          destinations: [
-            const NavigationDestination(
+          destinations: const [
+            NavigationDestination(
               icon: Icon(Icons.place_outlined),
               selectedIcon: Icon(Icons.place),
               label: '스팟',
             ),
             NavigationDestination(
-              icon: badge(pending, const Icon(Icons.inbox_outlined)),
-              selectedIcon: badge(pending, const Icon(Icons.inbox)),
-              label: '신청함',
+              icon: _RequestsBadge(Icons.inbox_outlined),
+              selectedIcon: _RequestsBadge(Icons.inbox),
+              label: '요청함',
             ),
             NavigationDestination(
-              icon: badge(unread, const Icon(Icons.chat_bubble_outline)),
-              selectedIcon: badge(unread, const Icon(Icons.chat_bubble)),
+              icon: _UnreadBadge(Icons.chat_bubble_outline),
+              selectedIcon: _UnreadBadge(Icons.chat_bubble),
               label: '채팅',
             ),
-            const NavigationDestination(
+            NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),
               label: '마이',
@@ -59,4 +55,40 @@ class ScaffoldWithNavBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _RequestsBadge extends ConsumerWidget {
+  const _RequestsBadge(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _CountBadgeIcon(
+    count: ref.watch(pendingReceivedCountProvider),
+    icon: icon,
+  );
+}
+
+class _UnreadBadge extends ConsumerWidget {
+  const _UnreadBadge(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) =>
+      _CountBadgeIcon(count: ref.watch(unreadTotalProvider), icon: icon);
+}
+
+class _CountBadgeIcon extends StatelessWidget {
+  const _CountBadgeIcon({required this.count, required this.icon});
+
+  final int count;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Badge(
+    isLabelVisible: count > 0,
+    label: Text('$count'),
+    child: Icon(icon),
+  );
 }

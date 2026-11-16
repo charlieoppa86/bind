@@ -30,7 +30,7 @@ abstract final class Routes {
   static String spotRequest(String userId) => '/spot/request/$userId';
   static const spotMe = '/spot/me';
 
-  // 탭 2: 신청함
+  // 탭 2: 요청함
   static const requests = '/requests';
   static const requestsReceived = '/requests/received';
   static String requestDetail(String requestId) =>

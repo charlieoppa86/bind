@@ -8,11 +8,12 @@ import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 import 'safety_menu.dart';
 
 /// 글로벌 > 신고 (바텀시트, US-010).
-/// 스팟 피드·신청 상세·대화방 3곳에서 호출한다.
+/// 스팟 피드·요청 상세·대화방 3곳에서 호출한다.
 class ReportSheet extends ConsumerStatefulWidget {
   const ReportSheet({required this.targetId, this.source, super.key});
 
@@ -38,7 +39,8 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
   @override
   Widget build(BuildContext context) {
     final nickname =
-        ref.watch(demoStoreProvider).user(widget.targetId)?.nickname ?? '상대';
+        ref.watch(userProvider(widget.targetId).select((u) => u?.nickname)) ??
+        '상대';
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -53,7 +55,7 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
           children: [
             Text('$nickname님을 신고할까요?', style: AppTypography.title),
             const SizedBox(height: AppSpacing.xs),
-            Text(
+            const Text(
               '신고한 사람은 상대에게 알려지지 않아요. '
               '서로 다른 ${AppLimits.reportsUntilSuspension}명에게 신고되면 이용이 정지돼요.',
               style: AppTypography.caption,
@@ -103,7 +105,7 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
               onChanged: (v) => setState(() => _alsoBlock = v ?? false),
               title: const Text('이 사용자 차단하기', style: AppTypography.body),
               subtitle: const Text(
-                '카드·신청·대화가 더 이상 보이지 않아요',
+                '카드·요청·대화가 더 이상 보이지 않아요',
                 style: AppTypography.caption,
               ),
               contentPadding: EdgeInsets.zero,

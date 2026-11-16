@@ -6,7 +6,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../session/session.dart';
+import '../../session/account_controller.dart';
 
 /// 글로벌 > 이용 정지 안내. 뒤로가기 불가, 로그아웃만 허용.
 class SuspendedScreen extends ConsumerWidget {
@@ -36,7 +36,7 @@ class SuspendedScreen extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.lg),
                       const Text('이용이 정지되었어요', style: AppTypography.heading),
                       const SizedBox(height: AppSpacing.sm),
-                      Text(
+                      const Text(
                         '서로 다른 사용자 ${AppLimits.reportsUntilSuspension}명에게 '
                         '신고가 누적되어 BIND 이용이 정지되었습니다.',
                         style: AppTypography.body,
@@ -49,7 +49,7 @@ class SuspendedScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(AppRadius.card),
                         ),
                         child: const Text(
-                          '정지 기간에는 체크인, 대화 신청, 채팅을 이용할 수 없어요. '
+                          '정지 기간에는 체크인, 대화 요청, 채팅을 이용할 수 없어요. '
                           '정지에 이의가 있다면 고객센터로 문의해 주세요.',
                           style: AppTypography.body,
                         ),
@@ -60,7 +60,7 @@ class SuspendedScreen extends ConsumerWidget {
               ),
               BottomCta(
                 child: OutlinedButton(
-                  onPressed: () => ref.read(sessionProvider.notifier).signOut(),
+                  onPressed: () => ref.read(accountProvider).signOut(),
                   child: const Text('로그아웃'),
                 ),
               ),

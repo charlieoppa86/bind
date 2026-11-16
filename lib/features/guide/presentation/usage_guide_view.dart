@@ -62,19 +62,19 @@ class _UsageGuideViewState extends State<UsageGuideView> {
               children: const [
                 _GuidePage(
                   step: 1,
-                  title: '지금 있는 장소를\n적고 체크인해요',
-                  body: '장소 이름을 자유롭게 적으면 돼요.\n같은 장소를 적은 사람끼리 서로의 주제를 볼 수 있어요.',
+                  title: '지금 있는 장소를\n검색해 체크인해요',
+                  body: '카페·라운지·행사장 이름으로 찾으면 돼요.\n같은 장소를 고른 사람끼리 서로의 주제를 볼 수 있어요.',
                   visual: _SpotVisual(),
                 ),
                 _GuidePage(
                   step: 2,
                   title: '얘기하고 싶은 주제\n한 줄을 올려요',
-                  body: '사진 대신 주제로 상대를 찾아요.\n신청은 한 마디와 함께 오고, 내가 수락해야 대화가 열려요.',
+                  body: '사진 대신 주제로 상대를 찾아요.\n요청은 한 마디와 함께 오고, 내가 수락해야 대화가 열려요.',
                   visual: _CardVisual(),
                 ),
                 _GuidePage(
                   step: 3,
-                  title: '이런 주제가\n신청을 많이 받아요',
+                  title: '이런 주제가\n요청을 많이 받아요',
                   body: '짧고 편하게 적어도 괜찮아요.\n지금 바로 이야기할 수 있는 주제면 충분해요.',
                   visual: _ExamplesVisual(),
                 ),
@@ -217,18 +217,18 @@ class _SpotVisual extends StatelessWidget {
             child: const Row(
               children: [
                 Icon(
-                  Icons.place_outlined,
+                  Icons.search_rounded,
                   size: 20,
                   color: AppColors.secondary,
                 ),
                 SizedBox(width: AppSpacing.sm),
-                Text('성수 워크라운지', style: AppTypography.bodyLarge),
+                Text('성수 워크', style: AppTypography.bodyLarge),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
           place('성수 워크라운지', '지금 9명', true),
-          place('성수 워크숍 카페', '비어 있음', false),
+          place('성수 워크숍 카페', '처음 체크인', false),
         ],
       ),
     );
@@ -252,7 +252,7 @@ class _CardVisual extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '받은 신청',
+              '받은 요청',
               style: AppTypography.caption.copyWith(color: AppColors.tertiary),
             ),
             const SizedBox(height: AppSpacing.xs),

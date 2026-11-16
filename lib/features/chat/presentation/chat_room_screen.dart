@@ -10,52 +10,47 @@ import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../../data/models/chat.dart';
 import '../../safety/presentation/safety_menu.dart';
 
+/// 대화방 상대 정보: (상대 uid, 상대가 떠났는지). 대화방이 없으면 null.
+final _roomPeerProvider = Provider.autoDispose.family<(String, bool)?, String>((
+  ref,
+  chatId,
+) {
+  final chat = ref.watch(chatProvider(chatId));
+  if (chat == null) return null;
+  final otherUid = chat.otherUid(DemoDb.myUid);
+  final deleted = ref.watch(
+    userProvider(otherUid).select((u) => u?.deleted ?? false),
+  );
+  return (otherUid, chat.leftUids.contains(otherUid) || deleted);
+});
+
 /// 채팅 > 대화 목록 > 대화방 (US-009). 텍스트만 주고받는다.
-class ChatRoomScreen extends ConsumerStatefulWidget {
+///
+/// 화면은 "상대가 누구이고 떠났는지"만 구독한다. 새 메시지가 오면 메시지 목록만,
+/// 입력 중에는 입력창의 보내기 버튼만 다시 그린다.
+class ChatRoomScreen extends ConsumerWidget {
   const ChatRoomScreen({required this.chatId, super.key});
 
   final String chatId;
 
-  @override
-  ConsumerState<ChatRoomScreen> createState() => _ChatRoomScreenState();
-}
-
-class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
-  final _input = TextEditingController();
-
-  @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
-  }
-
-  void _send() {
-    // TODO(firebase): chats/{chatId}/messages 추가 + 상대에게 FCM
-    ref
-        .read(demoStoreProvider.notifier)
-        .sendMessage(widget.chatId, _input.text);
-    _input.clear();
-    setState(() {});
-  }
-
-  void _leave() {
+  void _leave(BuildContext context, WidgetRef ref) {
     // US-017: 대화방을 나갈 때 평가를 한 번 묻는다.
-    if (ref.read(demoStoreProvider.notifier).shouldAskReview(widget.chatId)) {
-      context.push(Routes.chatReview(widget.chatId));
+    if (ref.read(demoStoreProvider.notifier).shouldAskReview(chatId)) {
+      context.push(Routes.chatReview(chatId));
     } else {
       context.pop();
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final db = ref.watch(demoStoreProvider);
-    final chat = db.chat(widget.chatId);
-    if (chat == null) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final peer = ref.watch(_roomPeerProvider(chatId));
+    if (peer == null) {
       return Scaffold(
         appBar: AppBar(),
         body: const EmptyState(
@@ -65,36 +60,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         ),
       );
     }
-    final otherUid = chat.otherUid(DemoDb.myUid);
-    final other = db.user(otherUid);
-    final left = chat.leftUids.contains(otherUid) || (other?.deleted ?? false);
-    final messages = db.messages[chat.id] ?? const <ChatMessage>[];
-
-    if ((db.unread[chat.id] ?? 0) > 0) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => ref.read(demoStoreProvider.notifier).openChat(chat.id),
-      );
-    }
+    final (otherUid, left) = peer;
 
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _leave();
+        if (!didPop) _leave(context, ref);
       },
       child: Scaffold(
         appBar: AppBar(
           titleSpacing: 0,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                left ? '떠난 사용자' : other?.nickname ?? '',
-                style: AppTypography.supportingTitle,
-              ),
-              if (!left && other != null)
-                Text(other.jobLabel, style: AppTypography.caption),
-            ],
-          ),
+          title: _RoomTitle(otherUid: otherUid, left: left),
           actions: [
             if (!left)
               SafetyMenuButton(
@@ -107,90 +83,145 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         ),
         body: Column(
           children: [
-            _RetentionBanner(chat: chat),
-            Expanded(
-              child: messages.isEmpty
-                  ? const EmptyState(
-                      icon: Icons.waving_hand_outlined,
-                      title: '대화가 열렸어요',
-                      message: '먼저 인사하고, 지금 어디쯤 있는지 알려주세요.',
-                    )
-                  : ListView.builder(
-                      reverse: true,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.md,
-                      ),
-                      itemCount: messages.length,
-                      itemBuilder: (_, i) {
-                        final index = messages.length - 1 - i;
-                        final m = messages[index];
-                        final prev = index > 0 ? messages[index - 1] : null;
-                        final next = index < messages.length - 1
-                            ? messages[index + 1]
-                            : null;
-                        final newDay =
-                            prev == null || !_sameDay(prev.sentAt, m.sentAt);
-                        final showTime =
-                            next == null ||
-                            next.senderUid != m.senderUid ||
-                            next.sentAt.difference(m.sentAt).inMinutes >= 1;
-                        return Column(
-                          children: [
-                            if (newDay) _DaySeparator(m.sentAt),
-                            _Bubble(
-                              message: m,
-                              mine: m.senderUid == DemoDb.myUid,
-                              showTime: showTime,
-                              grouped:
-                                  prev != null &&
-                                  prev.senderUid == m.senderUid &&
-                                  !newDay,
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-            ),
-            if (left)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                color: AppColors.fill,
-                child: SafeArea(
-                  top: false,
-                  child: Text(
-                    '상대가 BIND를 떠나 더 이상 메시지를 보낼 수 없어요.',
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.secondary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              )
-            else
-              _Composer(
-                controller: _input,
-                onSend: _send,
-                onChanged: () => setState(() {}),
-              ),
+            _RetentionBanner(chatId: chatId),
+            _ReadMarker(chatId),
+            Expanded(child: _MessageList(chatId)),
+            if (left) const _LeftNotice() else _Composer(chatId: chatId),
           ],
         ),
       ),
     );
   }
+}
+
+class _RoomTitle extends ConsumerWidget {
+  const _RoomTitle({required this.otherUid, required this.left});
+
+  final String otherUid;
+  final bool left;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (left) {
+      return const Text('떠난 사용자', style: AppTypography.supportingTitle);
+    }
+    final (name, job) = ref.watch(
+      userProvider(otherUid).select((u) => (u?.nickname ?? '', u?.jobLabel)),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(name, style: AppTypography.supportingTitle),
+        if (job != null) Text(job, style: AppTypography.caption),
+      ],
+    );
+  }
+}
+
+/// 메시지 목록. 이 방의 메시지가 바뀔 때만 다시 그린다.
+class _MessageList extends ConsumerWidget {
+  const _MessageList(this.chatId);
+
+  final String chatId;
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final messages = ref.watch(messagesProvider(chatId));
+    if (messages.isEmpty) {
+      return const EmptyState(
+        icon: Icons.waving_hand_outlined,
+        title: '대화가 열렸어요',
+        message: '먼저 인사하고, 지금 어디쯤 있는지 알려주세요.',
+      );
+    }
+    return ListView.builder(
+      reverse: true,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
+      // 맨 위(역순 목록의 마지막)에 시작 안내 한 줄
+      itemCount: messages.length + 1,
+      itemBuilder: (_, i) {
+        if (i == messages.length) return const _StartedNote();
+        final index = messages.length - 1 - i;
+        final m = messages[index];
+        final prev = index > 0 ? messages[index - 1] : null;
+        final next = index < messages.length - 1 ? messages[index + 1] : null;
+        final newDay = prev == null || !_sameDay(prev.sentAt, m.sentAt);
+        final showTime =
+            next == null ||
+            next.senderUid != m.senderUid ||
+            next.sentAt.difference(m.sentAt).inMinutes >= 1;
+        return Column(
+          key: ValueKey(m.id),
+          children: [
+            if (newDay) _DaySeparator(m.sentAt),
+            _Bubble(
+              message: m,
+              mine: m.senderUid == DemoDb.myUid,
+              showTime: showTime,
+              grouped: prev != null && prev.senderUid == m.senderUid && !newDay,
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-class _RetentionBanner extends StatelessWidget {
-  const _RetentionBanner({required this.chat});
+/// 보이지 않는 위젯: 보고 있는 동안 안 읽은 메시지가 생기면 바로 읽음 처리한다.
+class _ReadMarker extends ConsumerWidget {
+  const _ReadMarker(this.chatId);
 
-  final Chat chat;
+  final String chatId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadProvider(chatId));
+    if (unread > 0) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => ref.read(demoStoreProvider.notifier).openChat(chatId),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+class _LeftNotice extends StatelessWidget {
+  const _LeftNotice();
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      color: AppColors.fill,
+      child: SafeArea(
+        top: false,
+        child: Text(
+          '상대가 BIND를 떠나 더 이상 메시지를 보낼 수 없어요.',
+          style: AppTypography.body.copyWith(color: AppColors.secondary),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+class _RetentionBanner extends ConsumerWidget {
+  const _RetentionBanner({required this.chatId});
+
+  final String chatId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final expiresAt = ref.watch(
+      chatProvider(chatId).select((c) => c?.expiresAt),
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
@@ -208,8 +239,8 @@ class _RetentionBanner extends StatelessWidget {
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(
-              '${AppLimits.chatRetention.inDays}일 뒤 대화가 사라집니다 · '
-              '${TimeFormat.date(chat.expiresAt)}까지 보관',
+              '${AppLimits.chatRetention.inDays}일 뒤 대화가 사라집니다'
+              '${expiresAt == null ? '' : ' · ${TimeFormat.date(expiresAt)}까지 보관'}',
               style: AppTypography.caption,
             ),
           ),
@@ -302,20 +333,36 @@ class _Bubble extends StatelessWidget {
   }
 }
 
-class _Composer extends StatelessWidget {
-  const _Composer({
-    required this.controller,
-    required this.onSend,
-    required this.onChanged,
-  });
+/// 입력창. 글자를 칠 때 화면 전체가 아니라 보내기 버튼만 다시 그린다.
+class _Composer extends ConsumerStatefulWidget {
+  const _Composer({required this.chatId});
 
-  final TextEditingController controller;
-  final VoidCallback onSend;
-  final VoidCallback onChanged;
+  final String chatId;
+
+  @override
+  ConsumerState<_Composer> createState() => _ComposerState();
+}
+
+class _ComposerState extends ConsumerState<_Composer> {
+  final _input = TextEditingController();
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    if (_input.text.trim().isEmpty) return;
+    // TODO(firebase): chats/{chatId}/messages 추가 + 상대에게 FCM
+    ref
+        .read(demoStoreProvider.notifier)
+        .sendMessage(widget.chatId, _input.text);
+    _input.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final canSend = controller.text.trim().isNotEmpty;
     return DecoratedBox(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairline)),
@@ -333,12 +380,11 @@ class _Composer extends StatelessWidget {
             children: [
               Expanded(
                 child: TextField(
-                  controller: controller,
+                  controller: _input,
                   minLines: 1,
                   maxLines: 4,
                   textInputAction: TextInputAction.send,
-                  onChanged: (_) => onChanged(),
-                  onSubmitted: (_) => canSend ? onSend() : null,
+                  onSubmitted: (_) => _send(),
                   decoration: InputDecoration(
                     hintText: '메시지 보내기',
                     fillColor: AppColors.fill,
@@ -362,17 +408,48 @@ class _Composer extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              IconButton.filled(
-                tooltip: '보내기',
-                onPressed: canSend ? onSend : null,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  disabledBackgroundColor: AppColors.hairline,
-                  foregroundColor: AppColors.onPrimary,
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _input,
+                builder: (_, value, _) => IconButton.filled(
+                  tooltip: '보내기',
+                  onPressed: value.text.trim().isEmpty ? null : _send,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    disabledBackgroundColor: AppColors.hairline,
+                    foregroundColor: AppColors.onPrimary,
+                  ),
+                  icon: const Icon(Icons.arrow_upward_rounded),
                 ),
-                icon: const Icon(Icons.arrow_upward_rounded),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 대화방 맨 위: 요청이 수락되어 시작된 대화라는 안내
+class _StartedNote extends StatelessWidget {
+  const _StartedNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs + 2,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.fill,
+            borderRadius: BorderRadius.circular(AppRadius.full),
+          ),
+          child: Text(
+            '대화 요청이 수락되어 대화가 시작됐어요',
+            style: AppTypography.caption.copyWith(color: AppColors.secondary),
           ),
         ),
       ),

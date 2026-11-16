@@ -9,6 +9,7 @@ import '../../../core/constants/app_limits.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 
 /// 마이 > 마이 > BIND+ (US-019)
@@ -51,9 +52,10 @@ class PlusScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(demoStoreProvider);
-    final active = db.isPlusActive;
-    final until = db.me?.plusExpiresAt;
+    // BIND+ 상태 세 값만 구독한다(프로필의 다른 값이 바뀌어도 그대로).
+    final active = ref.watch(isPlusActiveProvider);
+    final autoRenew = ref.watch(plusAutoRenewProvider);
+    final until = ref.watch(meProvider.select((m) => m?.plusExpiresAt));
     final price = _won.format(AppLimits.plusMonthlyPriceWon);
 
     return Scaffold(
@@ -72,7 +74,7 @@ class PlusScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   active
-                      ? (db.plusAutoRenew
+                      ? (autoRenew
                             ? '${TimeFormat.fullDate(until!)}에 자동 갱신돼요'
                             : '해지했어요. ${TimeFormat.fullDate(until!)}까지 혜택이 유지돼요')
                       : '월 $price원',
@@ -81,20 +83,20 @@ class PlusScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                _Compare(
+                const _Compare(
                   icon: Icons.short_text_rounded,
                   title: '동시에 올리는 주제',
                   free: '${AppLimits.freeActiveTopics}개',
                   plus: '${AppLimits.plusActiveTopics}개',
                 ),
-                _Compare(
+                const _Compare(
                   icon: Icons.send_outlined,
-                  title: '하루 대화 신청',
+                  title: '하루 대화 요청',
                   free: '${AppLimits.freeDailyRequests}번',
                   plus: '무제한',
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text(
+                const Text(
                   '개발 질문과 이직 고민처럼 서로 다른 대화를 한 번에 열어둘 수 있어요.',
                   style: AppTypography.caption,
                 ),
@@ -103,7 +105,7 @@ class PlusScreen extends ConsumerWidget {
           ),
           BottomCta(
             child: active
-                ? (db.plusAutoRenew
+                ? (autoRenew
                       ? OutlinedButton(
                           onPressed: () => _cancel(context, ref, until!),
                           child: const Text('구독 해지'),

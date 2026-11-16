@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../app/router/routes.dart';
-import '../../../data/demo/demo_store.dart';
 import 'usage_guide_view.dart';
+import '../../session/account_controller.dart';
 
 /// 인증 > 온보딩 > 사용법 가이드 (가입 직후 1회)
 class OnboardingGuideScreen extends ConsumerWidget {
@@ -15,8 +15,7 @@ class OnboardingGuideScreen extends ConsumerWidget {
     return Scaffold(
       body: UsageGuideView(
         onDone: () {
-          // TODO(firebase): users/{uid}.onboardingGuideSeen = true
-          ref.read(demoStoreProvider.notifier).markGuideSeen();
+          ref.read(accountProvider).markGuideSeen();
           context.go(Routes.checkinSpots);
         },
       ),

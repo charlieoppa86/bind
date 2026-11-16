@@ -6,7 +6,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/constants/enums.dart';
 
-/// 카드·신청 상세·대화방의 신고/차단 메뉴(US-010: 두 번 눌러 신고·차단).
+/// 카드·요청 상세·대화방의 신고/차단 메뉴(US-010: 두 번 눌러 신고·차단).
 class SafetyMenuButton extends StatelessWidget {
   const SafetyMenuButton({
     required this.targetUid,

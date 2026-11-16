@@ -21,7 +21,7 @@ class BindApp extends ConsumerWidget {
       locale: const Locale('ko', 'KR'),
       supportedLocales: const [Locale('ko', 'KR')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      // 신청 도착·수락·만료 등 앱 안 알림.
+      // 요청 도착·수락·만료 등 앱 안 알림.
       // TODO(fcm): 앱이 닫혀 있을 때는 FCM 푸시 → 같은 경로로 딥링크
       builder: (context, child) => AnnotatedRegion(
         value: AppTheme.systemOverlay,

@@ -30,7 +30,7 @@ class Report {
   };
 }
 
-/// `users/{uid}/blocks/{targetUid}` — 차단한 사람의 카드·신청은 비노출(US-010).
+/// `users/{uid}/blocks/{targetUid}` — 차단한 사람의 카드·요청은 비노출(US-010).
 class Block {
   const Block({
     required this.targetUid,

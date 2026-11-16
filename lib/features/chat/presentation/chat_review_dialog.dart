@@ -7,6 +7,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/enums.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 
 /// 채팅 > 대화방 > 대화 평가 (다이얼로그, US-017). 평가자는 비공개.
@@ -17,11 +18,12 @@ class ChatReviewDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(demoStoreProvider);
-    final chat = db.chat(chatId);
-    final nickname = chat == null
+    final otherUid = ref.watch(
+      chatProvider(chatId).select((c) => c?.otherUid(DemoDb.myUid)),
+    );
+    final nickname = otherUid == null
         ? '상대'
-        : db.user(chat.otherUid(DemoDb.myUid))?.nickname ?? '상대';
+        : ref.watch(userProvider(otherUid).select((u) => u?.nickname)) ?? '상대';
 
     void finish(ChatReviewRating? rating) {
       // TODO(firebase): rating != null 이면 chats/{chatId}/reviews/{myUid} 저장

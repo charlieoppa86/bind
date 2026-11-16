@@ -44,18 +44,12 @@ class Session {
   );
 }
 
-/// TODO(firebase): FirebaseAuth.authStateChanges + `users/{uid}` 문서 +
-/// 내 활성 체크인 스트림을 구독해 [Session]을 만든다.
-/// 지금은 화면 흐름 확인용 로컬 상태 전이만 제공한다.
+/// 라우터 가드가 보는 세션. 로그인·온보딩은 `AccountController`가,
+/// 체크인 상태는 데모 저장소가 갱신한다.
+/// TODO(firebase 2단계): 내 활성 체크인을 Firestore 스트림으로 구독한다.
 class SessionController extends Notifier<Session> {
   @override
   Session build() => const Session();
-
-  /// 스플래시에서 호출. 현재는 항상 로그아웃 상태로 시작.
-  Future<void> restore() async {
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    state = state.copyWith(status: SessionStatus.signedOut);
-  }
 
   void signedIn({required String uid, required bool isOnboarded}) {
     state = Session(

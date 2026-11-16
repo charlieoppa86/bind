@@ -1,0 +1,82 @@
+rules_version = '2';
+
+// BIND Firestore 보안 규칙 (1단계: 로그인·프로필·닉네임)
+// - 신뢰가 필요한 값(좋았어요 수, 신고·정지, BIND+ 만료)은 클라이언트가 못 쓴다.
+//   Cloud Functions(Admin SDK)만 쓴다. Admin SDK는 규칙을 거치지 않는다.
+// - 체크인·요청·채팅 컬렉션은 2단계에서 규칙을 연다(지금은 모두 거부).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMe(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // 서버만 쓰는 users 필드
+    function trustedKeys() {
+      return ['goodReviewCount', 'reportCount', 'suspended', 'isPlus',
+              'plusExpiresAt', 'deleted'];
+    }
+
+    // 클라이언트가 쓸 수 있는 users 필드
+    function clientKeys() {
+      return ['nickname', 'nicknameKey', 'jobTag', 'jobCustom', 'consentedAt',
+              'onboardingGuideSeen', 'createdAt'];
+    }
+
+    function validProfile(data) {
+      return data.nickname is string
+        && data.nickname.size() >= 2 && data.nickname.size() <= 10
+        && data.nicknameKey is string
+        && data.jobTag is string
+        && (data.get('jobCustom', null) == null
+            || (data.jobCustom is string && data.jobCustom.size() <= 10));
+    }
+
+    // 닉네임 예약 문서를 이 요청(배치·트랜잭션) 안에서 내 것으로 갖고 있는지
+    function ownsNickname(key) {
+      return getAfter(/databases/$(database)/documents/nicknames/$(key)).data.uid
+        == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      // 상대 카드·대화방에 닉네임·하는 일을 보여야 해서 로그인 사용자는 읽을 수 있다.
+      allow read: if signedIn();
+
+      allow create: if isMe(uid)
+        && request.resource.data.keys().hasOnly(clientKeys())
+        && validProfile(request.resource.data)
+        && request.resource.data.consentedAt == request.time
+        && ownsNickname(request.resource.data.nicknameKey);
+
+      allow update: if isMe(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(trustedKeys().concat(['consentedAt', 'createdAt']))
+        && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(clientKeys())
+        && validProfile(request.resource.data)
+        && ownsNickname(request.resource.data.nicknameKey);
+
+      // 탈퇴는 Functions(deleteAccount)가 한다.
+      allow delete: if false;
+    }
+
+    // nicknames/{nicknameKey} = { uid } — 같은 닉네임은 한 사람만
+    match /nicknames/{key} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // 2단계에서 체크인·요청·채팅 규칙을 연다.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

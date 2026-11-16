@@ -54,7 +54,7 @@ class IntroTopicCard extends StatelessWidget {
   final String topic;
   final Widget? trailing;
 
-  /// 카드 아래쪽에 붙는 내용(예: 받은 신청 한 마디)
+  /// 카드 아래쪽에 붙는 내용(예: 받은 요청 한 마디)
   final Widget? footer;
 
   /// 떠 있는 그림자(첫 화면처럼 겹쳐 놓을 때)

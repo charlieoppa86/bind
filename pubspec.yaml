@@ -27,6 +27,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 flutter:
   uses-material-design: true
 
@@ -49,3 +50,16 @@ flutter:
           weight: 600
         - asset: assets/fonts/Pretendard-Bold.otf
           weight: 700
+
+# 홈 화면 앱 아이콘: `dart run flutter_launcher_icons`로 Android·iOS 크기별 아이콘 생성
+# 원본: BIND 로고의 N만 잘라 흰색으로, 배경은 AppColors.canvas(#17171C)
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/app_icon.png
+  remove_alpha_ios: true
+  adaptive_icon_background: "#17171C"
+  adaptive_icon_foreground: assets/icon/app_icon_foreground.png
+  # 전경 이미지에 이미 안전 영역 여백이 있어 추가 여백(기본 16%)은 0
+  adaptive_icon_foreground_inset: 0
+  min_sdk_android: 21

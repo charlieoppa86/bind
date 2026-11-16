@@ -6,6 +6,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 
 /// 마이 > 마이 > 차단 목록
@@ -14,8 +15,7 @@ class BlockedUsersScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final blocks = ref.watch(demoStoreProvider).blocks.values.toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final blocks = ref.watch(blocksProvider);
     return Scaffold(
       backgroundColor: blocks.isEmpty
           ? AppColors.canvas

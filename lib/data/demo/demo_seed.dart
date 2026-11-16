@@ -4,6 +4,7 @@ import '../models/app_user.dart';
 import '../models/chat.dart';
 import '../models/chat_request.dart';
 import '../models/checkin.dart';
+import '../models/place.dart';
 import '../models/spot.dart';
 
 /// 데모 모드 더미 데이터. Firebase 연결 전 화면 흐름을 실제처럼 확인하기 위한 값이다.
@@ -11,13 +12,93 @@ import '../models/spot.dart';
 abstract final class DemoSeed {
   static const myUid = 'me';
 
-  /// 사용자들이 입력해 둔 장소. 같은 장소를 입력하면 이 카드들이 보인다.
-  static const spots = <Spot>[
-    Spot(id: 'seongsu', name: '성수 워크라운지', creatorUid: 'u-yuna'),
-    Spot(id: 'seongsu-popup', name: '연무장길 팝업 스토어', creatorUid: 'u-minseo'),
-    Spot(id: 'pangyo-conf', name: '판교 프로덕트 컨퍼런스', creatorUid: 'u-kang'),
-    Spot(id: 'yeonnam', name: '연남 코워킹 하우스', creatorUid: 'u-eunbi'),
-    Spot(id: 'sinchon-lib', name: '신촌 중앙도서관', creatorUid: 'u-nari'),
+  /// 데모 장소 검색 결과(카카오 장소 검색 대신). 이름·주소는 가상이다.
+  static const places = <Place>[
+    Place(
+      id: 'k-1001',
+      name: '성수 워크라운지',
+      address: '서울 성동구 성수이로 00',
+      category: '공유오피스',
+    ),
+    Place(
+      id: 'k-1002',
+      name: '연무장길 팝업 스토어',
+      address: '서울 성동구 연무장길 00',
+      category: '팝업스토어',
+    ),
+    Place(
+      id: 'k-1003',
+      name: '판교 프로덕트 컨퍼런스',
+      address: '경기 성남시 분당구 판교역로 00',
+      category: '컨벤션센터',
+    ),
+    Place(
+      id: 'k-1004',
+      name: '연남 코워킹 하우스',
+      address: '서울 마포구 동교로 00',
+      category: '공유오피스',
+    ),
+    Place(
+      id: 'k-1005',
+      name: '신촌 중앙도서관',
+      address: '서울 서대문구 연세로 00',
+      category: '도서관',
+    ),
+    Place(
+      id: 'k-2001',
+      name: '성수 로스터리 카페',
+      address: '서울 성동구 아차산로 00',
+      category: '카페',
+    ),
+    Place(
+      id: 'k-2002',
+      name: '성수 루프탑 카페',
+      address: '서울 성동구 서울숲길 00',
+      category: '카페',
+    ),
+    Place(
+      id: 'k-2003',
+      name: '성수 스터디카페 24',
+      address: '서울 성동구 성수일로 00',
+      category: '스터디카페',
+    ),
+    Place(
+      id: 'k-2004',
+      name: '판교 테크 라운지',
+      address: '경기 성남시 분당구 대왕판교로 00',
+      category: '공유오피스',
+    ),
+    Place(
+      id: 'k-2005',
+      name: '강남 북카페',
+      address: '서울 강남구 테헤란로 00',
+      category: '북카페',
+    ),
+    Place(
+      id: 'k-2006',
+      name: '합정 브런치 카페',
+      address: '서울 마포구 양화로 00',
+      category: '카페',
+    ),
+  ];
+
+  /// 이미 누군가 체크인해 둔 장소(places의 앞 5곳)
+  static final spots = <Spot>[
+    for (final (id, creator, place) in [
+      ('seongsu', 'u-yuna', places[0]),
+      ('seongsu-popup', 'u-minseo', places[1]),
+      ('pangyo-conf', 'u-kang', places[2]),
+      ('yeonnam', 'u-eunbi', places[3]),
+      ('sinchon-lib', 'u-nari', places[4]),
+    ])
+      Spot(
+        id: id,
+        placeId: place.id,
+        name: place.name,
+        address: place.address,
+        category: place.category,
+        creatorUid: creator,
+      ),
   ];
 
   static const users = <AppUser>[
@@ -221,13 +302,13 @@ abstract final class DemoSeed {
       }(),
   ];
 
-  /// 내 신청 상대가 수락할지(데모 시나리오). 없는 uid는 수락.
+  /// 내 요청 상대가 수락할지(데모 시나리오). 없는 uid는 수락.
   static const rejectingUids = {'u-taeo', 'u-kang'};
 
-  /// 체크인 직후 나에게 신청을 보내는 사람과 한 마디: (uid, 한 마디, 체크인 후 지연)
+  /// 체크인 직후 나에게 요청을 보내는 사람과 한 마디: (uid, 한 마디, 체크인 후 지연)
   static const incomingRequests = <(String, String, Duration)>[
     ('u-doyun', '저도 같은 고민 중이라 얘기 나눠보고 싶어요!', Duration(seconds: 6)),
-    ('u-jaehyun', '주제 보고 반가워서 신청해요. 10분만 얘기해요', Duration(seconds: 40)),
+    ('u-jaehyun', '주제 보고 반가워서 요청해요. 10분만 얘기해요', Duration(seconds: 40)),
   ];
 
   /// 빈 스팟에서 "누가 오면 알려줘"를 켰을 때 들어오는 사람
@@ -235,11 +316,11 @@ abstract final class DemoSeed {
   static const arrivingTopic = ('초기 창업 공동창업자 찾는 법', TopicCategory.startup);
   static const arrivalDelay = Duration(seconds: 8);
 
-  /// 신청 응답·채팅 답장 지연
+  /// 요청 응답·채팅 답장 지연
   static const responseDelay = Duration(seconds: 5);
   static const replyDelay = Duration(seconds: 2);
 
-  static const greeting = '안녕하세요! 신청 보고 반가웠어요 😊 지금 라운지 어디쯤 계세요?';
+  static const greeting = '안녕하세요! 요청 보고 반가웠어요 😊 지금 라운지 어디쯤 계세요?';
 
   static const replies = [
     '오 저도 그거 궁금했어요. 어떻게 하고 계세요?',
@@ -249,7 +330,7 @@ abstract final class DemoSeed {
     '좋아요! 이따 봬요 👋',
   ];
 
-  /// 이미 지나간 보낸 신청(상태 표시용): (uid, spotId, 한 마디, 상태, 몇 분 전)
+  /// 이미 지나간 보낸 요청(상태 표시용): (uid, spotId, 한 마디, 상태, 몇 분 전)
   static const pastSent = <(String, String, String, ChatRequestStatus, int)>[
     (
       'u-minseo',
@@ -291,7 +372,7 @@ abstract final class DemoSeed {
       'u-seojun',
       3,
       [
-        (false, '안녕하세요, Flutter 상태관리 주제 보고 신청했어요', 175),
+        (false, '안녕하세요, Flutter 상태관리 주제 보고 요청했어요', 175),
         (true, '반가워요! 요즘 Riverpod 쓰고 있어요', 172),
         (false, 'Notifier로 바꾸면서 코드가 꽤 줄었죠?', 170),
         (true, '네 build()만 남기니까 훨씬 깔끔해요', 168),

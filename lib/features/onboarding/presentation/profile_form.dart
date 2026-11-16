@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -7,7 +9,8 @@ import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../data/demo/demo_store.dart';
+import '../../../data/account/account_repository.dart';
+import '../../session/account_controller.dart';
 
 /// 닉네임 + 직무 태그 입력 (US-002). 온보딩과 프로필 수정에서 같이 쓴다.
 class ProfileForm extends ConsumerStatefulWidget {
@@ -28,7 +31,12 @@ class ProfileForm extends ConsumerStatefulWidget {
   final String submitLabel;
 
   /// [jobCustom]은 기타를 골랐을 때만 값이 있다.
-  final void Function(String nickname, JobTag jobTag, String? jobCustom)
+  /// 저장 중 닉네임을 다른 사람이 가져가면 [NicknameTakenException]을 던진다.
+  final FutureOr<void> Function(
+    String nickname,
+    JobTag jobTag,
+    String? jobCustom,
+  )
   onSubmit;
 
   @override
@@ -63,11 +71,39 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
     if (n.length < AppLimits.nicknameMin) {
       return '닉네임은 ${AppLimits.nicknameMin}자 이상이어야 해요';
     }
-    if (n != widget.initialNickname &&
-        ref.read(demoStoreProvider.notifier).isNicknameTaken(n)) {
+    if (_takenNickname != null &&
+        nicknameKey(n) == nicknameKey(_takenNickname!)) {
       return '이미 쓰고 있는 닉네임이에요';
     }
     return null;
+  }
+
+  /// 서버에서 이미 쓰고 있다고 확인된 닉네임
+  String? _takenNickname;
+  bool _submitting = false;
+
+  /// 닉네임 중복은 저장 버튼을 누를 때 서버(닉네임 예약)에 물어본다.
+  Future<void> _submit() async {
+    final nickname = _nickname.text.trim();
+    setState(() => _submitting = true);
+    try {
+      final changed =
+          nicknameKey(nickname) != nicknameKey(widget.initialNickname);
+      if (changed &&
+          await ref.read(accountProvider).isNicknameTaken(nickname)) {
+        if (mounted) setState(() => _takenNickname = nickname);
+        return;
+      }
+      await widget.onSubmit(
+        nickname,
+        _jobTag!,
+        _isOther ? _jobCustom.text.trim() : null,
+      );
+    } on NicknameTakenException {
+      if (mounted) setState(() => _takenNickname = nickname);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   bool get _valid =>
@@ -189,13 +225,7 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
         ),
         BottomCta(
           child: FilledButton(
-            onPressed: _valid
-                ? () => widget.onSubmit(
-                    _nickname.text.trim(),
-                    _jobTag!,
-                    _isOther ? _jobCustom.text.trim() : null,
-                  )
-                : null,
+            onPressed: _valid && !_submitting ? _submit : null,
             child: Text(widget.submitLabel),
           ),
         ),
