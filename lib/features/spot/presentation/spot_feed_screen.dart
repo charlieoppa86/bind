@@ -7,11 +7,9 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/enums.dart';
-import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../../data/models/checkin.dart';
-import '../../checkin/presentation/room_pin_screen.dart';
 import '../../safety/presentation/safety_menu.dart';
 
 /// 스팟 > 스팟 피드 (US-006, US-015). 체크인 후 홈.
@@ -44,41 +42,6 @@ class _SpotFeedScreenState extends ConsumerState<SpotFeedScreen> {
         centerTitle: false,
         titleSpacing: AppSpacing.page,
         toolbarHeight: 64,
-        actions: [
-          if (db.isCreator(mine.first.spotId))
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.md),
-              child: Pressable(
-                onTap: () => showRoomPinSheet(context, mine.first.spotId),
-                color: AppColors.canvas,
-                borderRadius: AppRadius.full,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.key_rounded,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '입장 PIN',
-                        style: AppTypography.body.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -95,7 +58,7 @@ class _SpotFeedScreenState extends ConsumerState<SpotFeedScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '지금 ${db.headcount(mine.first.spotId, now)}명이 체크인 중',
+                  '지금 ${db.headcount(mine.first.spotId, now)}명이 같은 장소에 있어요',
                   style: AppTypography.caption.copyWith(
                     color: AppColors.secondary,
                   ),
@@ -169,7 +132,7 @@ class _SpotFeedScreenState extends ConsumerState<SpotFeedScreen> {
   }
 }
 
-/// 다른 사람의 주제 카드: 닉네임·직무·주제·남은 시간만(US-006)
+/// 다른 사람의 주제 카드: 닉네임·직무·주제만(US-006)
 class TopicCard extends StatelessWidget {
   const TopicCard({
     required this.checkin,
@@ -189,8 +152,6 @@ class TopicCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = checkin;
-    final left = c.remaining(now);
-    final endingSoon = left.inMinutes < 30;
     return Pressable(
       color: AppColors.canvas,
       onTap: () => context.push(
@@ -249,19 +210,17 @@ class TopicCard extends StatelessWidget {
               padding: const EdgeInsets.only(right: AppSpacing.md),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.schedule_rounded,
+                  const Icon(
+                    Icons.tag_rounded,
                     size: 14,
-                    color: endingSoon ? AppColors.error : AppColors.tertiary,
+                    color: AppColors.tertiary,
                   ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      '${c.category.label} · ${TimeFormat.remaining(left)}',
+                      c.category.label,
                       style: AppTypography.caption.copyWith(
-                        color: endingSoon
-                            ? AppColors.error
-                            : AppColors.secondary,
+                        color: AppColors.secondary,
                       ),
                     ),
                   ),
@@ -305,7 +264,6 @@ class _MyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final left = cards.first.remaining(now);
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -348,24 +306,11 @@ class _MyCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    TimeFormat.remaining(left),
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.heading,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '체크인 관리',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.secondary,
-                    ),
-                  ),
-                ],
+              Text(
+                '체크인 관리',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.secondary,
+                ),
               ),
               const Icon(
                 Icons.chevron_right_rounded,

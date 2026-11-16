@@ -9,24 +9,17 @@ import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/constants/topic_content.dart';
-import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_store.dart';
 
-/// 체크인 > 주제 설정 (US-005, US-014, US-016)
+/// 체크인 > 주제 수정·추가 (US-005, US-014, US-016)
 ///
-/// - [spotId]: 코드 인증 직후 새 체크인
+/// 새 체크인은 체크인 화면에서 한 번에 한다. 이 화면은 체크인 뒤에 쓴다.
 /// - [editId]: 내 체크인의 주제 수정
 /// - [add]: BIND+ 사용자의 주제 추가
 class TopicSetupScreen extends ConsumerStatefulWidget {
-  const TopicSetupScreen({
-    this.spotId,
-    this.editId,
-    this.add = false,
-    super.key,
-  });
+  const TopicSetupScreen({this.editId, this.add = false, super.key});
 
-  final String? spotId;
   final String? editId;
   final bool add;
 
@@ -37,9 +30,6 @@ class TopicSetupScreen extends ConsumerStatefulWidget {
 class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
   final _topic = TextEditingController();
   TopicCategory? _category;
-  StayDuration _stay = StayDuration.twoHours;
-
-  bool get _isNewCheckin => widget.editId == null && !widget.add;
 
   @override
   void initState() {
@@ -79,19 +69,10 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
       store.updateTopic(widget.editId!, topic, _category!);
       context.pop();
       _snack('주제를 바꿨어요');
-    } else if (widget.add) {
+    } else {
       store.addTopic(topic, _category!);
       context.pop();
       _snack('주제를 추가했어요');
-    } else {
-      // TODO(firebase): checkins 문서 생성
-      store.checkIn(
-        spotId: widget.spotId!,
-        topic: topic,
-        category: _category!,
-        stay: _stay,
-      );
-      context.go(Routes.spot);
     }
   }
 
@@ -101,18 +82,11 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(demoStoreProvider);
-    final spot = db.spot(
-      widget.spotId ?? db.myCheckins(DateTime.now()).firstOrNull?.spotId,
-    );
-    final title = widget.editId != null
-        ? '주제 수정'
-        : widget.add
-        ? '주제 추가'
-        : '주제 설정';
-    final endsAt = DateTime.now().add(_stay.duration);
+    final spot = db.spot(db.myCheckins(DateTime.now()).firstOrNull?.spotId);
+    final title = widget.editId != null ? '주제 수정' : '주제 추가';
 
     return Scaffold(
-      appBar: AppBar(title: _isNewCheckin ? null : Text(title)),
+      appBar: AppBar(title: Text(title)),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -133,10 +107,7 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
                   eyebrow: spot == null
                       ? null
                       : MetaLabel(spot.name, icon: Icons.place_outlined),
-                  title: _isNewCheckin
-                      ? '지금 어떤 얘기를\n하고 싶으세요?'
-                      : '$title할 내용을\n적어 주세요',
-                  description: _isNewCheckin ? '같은 공간 사람들에게 이 한 줄이 보여요.' : null,
+                  title: '$title할 내용을\n적어 주세요',
                 ),
                 const _Label('카테고리'),
                 Wrap(
@@ -201,45 +172,13 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
                           .deleteRecentTopic(topic),
                     ),
                 ],
-
-                if (_isNewCheckin) ...[
-                  const SizedBox(height: AppSpacing.xl),
-                  const _Label('얼마나 머무르세요?'),
-                  Row(
-                    children: [
-                      for (final s in StayDuration.values) ...[
-                        Expanded(
-                          child: SelectChip(
-                            label: s.label,
-                            expand: true,
-                            selected: _stay == s,
-                            onTap: () => setState(() => _stay = s),
-                          ),
-                        ),
-                        if (s != StayDuration.values.last)
-                          const SizedBox(width: AppSpacing.sm),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    '${TimeFormat.clock(endsAt)}까지 내 카드가 보여요. 시간이 끝나면 자동으로 내려가요.',
-                    style: AppTypography.caption,
-                  ),
-                ],
               ],
             ),
           ),
           BottomCta(
             child: FilledButton(
               onPressed: _valid ? _submit : null,
-              child: Text(
-                widget.editId != null
-                    ? '저장'
-                    : widget.add
-                    ? '주제 추가'
-                    : '체크인하기',
-              ),
+              child: Text(widget.editId != null ? '저장' : '주제 추가'),
             ),
           ),
         ],

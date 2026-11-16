@@ -53,6 +53,13 @@ abstract final class AppColors {
     (Color(0xFF123236), Color(0xFF5FD0DC)),
   ];
 
+  // ── 외부 브랜드 가이드 고정값(바꾸지 않는다) ──
+  /// Google 로그인 버튼 Dark 테마
+  /// (https://developers.google.com/identity/branding-guidelines)
+  static const googleDarkFill = Color(0xFF131314);
+  static const googleDarkStroke = Color(0xFF8E918F);
+  static const googleDarkText = Color(0xFFE3E3E3);
+
   /// 컨트롤 경계선
   static const controlBorder = Color(0x29FFFFFF);
 

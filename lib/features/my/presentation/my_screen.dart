@@ -179,7 +179,7 @@ class MyScreen extends ConsumerWidget {
                           style: AppTypography.subtitle,
                         ),
                         Text(
-                          '체크인 중 · ${TimeFormat.remaining(mine.first.remaining(now))}',
+                          '체크인 중 · ${TimeFormat.clock(mine.first.startedAt)}부터',
                           style: AppTypography.caption,
                         ),
                       ],

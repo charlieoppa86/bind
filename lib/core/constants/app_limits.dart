@@ -18,20 +18,12 @@ abstract final class AppLimits {
   /// US-009 / US-012 대화 보관 기간
   static const chatRetention = Duration(days: 7);
 
-  /// 방에 입장할 수 있는 장소 반경(m). 이 안에 있는 사람끼리만 대화한다.
-  static const roomRadiusMeters = 200.0;
+  /// 장소 이름 길이(자유 입력)
+  static const placeNameMin = 2;
+  static const placeNameMax = 20;
 
-  /// 방 이름 길이
-  static const roomNameMin = 2;
-  static const roomNameMax = 20;
-
-  /// 주변 방 목록에 "범위 밖"으로 함께 보여줄 거리(m)
-  static const nearbyListMeters = 1000.0;
-
-  // US-004 입장 PIN(방 개설자가 만든다)
-  static const spotCodeLength = 4;
-  static const spotCodeMaxAttempts = 5;
-  static const spotCodeLockDuration = Duration(minutes: 10);
+  /// 체크인 화면의 "최근 간 장소" 개수
+  static const recentPlacesCount = 3;
 
   /// US-010 서로 다른 신고자 수 누적 시 이용 정지
   static const reportsUntilSuspension = 3;

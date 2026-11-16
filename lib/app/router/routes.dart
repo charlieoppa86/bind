@@ -12,25 +12,14 @@ abstract final class Routes {
   // 체크인
   static const checkin = '/checkin';
   static const checkinSpots = '/checkin/spots';
-  static String spotVerify(String spotId) => '/checkin/spots/$spotId/verify';
-
-  /// 이 근처에 새 방 열기(장소 선택)
-  static const roomCreate = '/checkin/create';
-
-  /// 방을 연 직후: 개설자에게 입장 PIN 보여주기
-  static String roomPin(String spotId) => '/checkin/create/$spotId/pin';
 
   static const checkinTopic = '/checkin/topic';
   static const checkinTopicExamples = '/checkin/topic/examples';
 
-  /// 주제 설정: 새 체크인([spotId]) / 주제 수정([editId]) / 주제 추가([add])
-  static String topicSetup({
-    String? spotId,
-    String? editId,
-    bool add = false,
-  }) => Uri(
+  /// 주제 수정([editId]) / 주제 추가([add])
+  static String topicSetup({String? editId, bool add = false}) => Uri(
     path: checkinTopic,
-    queryParameters: {'spotId': ?spotId, 'edit': ?editId, if (add) 'add': '1'},
+    queryParameters: {'edit': ?editId, if (add) 'add': '1'},
   ).toString();
 
   static String topicExamples(String category) =>

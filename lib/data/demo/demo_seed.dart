@@ -11,106 +11,13 @@ import '../models/spot.dart';
 abstract final class DemoSeed {
   static const myUid = 'me';
 
-  /// 열려 있는 방 + 개설자가 만든 입장 PIN.
-  /// 실제 서비스에서 PIN은 `spotSecrets`에 있고, 개설자 본인에게만 보인다.
-  static const spots = <(Spot, String)>[
-    (
-      Spot(
-        id: 'seongsu',
-        name: '성수 워크라운지',
-        address: '서울 성동구 성수동2가 · 3층 라운지',
-        latitude: 37.54460,
-        longitude: 127.05570,
-        creatorUid: 'u-yuna',
-      ),
-      '2580',
-    ),
-    (
-      Spot(
-        id: 'seongsu-book',
-        name: '성수 북카페 2층',
-        address: '서울 성동구 성수동2가 · 창가 긴 테이블',
-        latitude: 37.54560,
-        longitude: 127.05660,
-        creatorUid: 'u-sora',
-      ),
-      '1357',
-    ),
-    (
-      Spot(
-        id: 'seongsu-popup',
-        name: '연무장길 팝업 스토어',
-        address: '서울 성동구 성수동2가 · 1층 라운지',
-        latitude: 37.54200,
-        longitude: 127.05900,
-        creatorUid: 'u-minseo',
-      ),
-      '4826',
-    ),
-    (
-      Spot(
-        id: 'pangyo-conf',
-        name: '판교 프로덕트 컨퍼런스 2026',
-        address: '경기 성남시 분당구 · 그랜드볼룸 B',
-        latitude: 37.39470,
-        longitude: 127.11120,
-        creatorUid: 'u-kang',
-        isEvent: true,
-      ),
-      '1126',
-    ),
-    (
-      Spot(
-        id: 'yeonnam',
-        name: '연남 코워킹 하우스',
-        address: '서울 마포구 연남동 · 2층 오픈데스크',
-        latitude: 37.56270,
-        longitude: 126.92550,
-        creatorUid: 'u-eunbi',
-      ),
-      '7413',
-    ),
-    (
-      Spot(
-        id: 'sinchon-lib',
-        name: '신촌 캠퍼스 도서관 라운지',
-        address: '서울 서대문구 · 중앙도서관 1층',
-        latitude: 37.55960,
-        longitude: 126.93700,
-        creatorUid: 'u-nari',
-      ),
-      '0909',
-    ),
-    (
-      Spot(
-        id: 'gangnam-hub',
-        name: '강남 스타트업 허브 5F',
-        address: '서울 강남구 역삼동 · 5층 라운지',
-        latitude: 37.50060,
-        longitude: 127.03640,
-        creatorUid: 'u-hyunsoo',
-      ),
-      '3030',
-    ),
-  ];
-
-  /// 새 방을 열 수 있는 장소(장소 검색 결과). (이름, 주소, 위도, 경도)
-  static const places = <(String, String, double, double)>[
-    ('성수 카페거리 루프탑', '서울 성동구 성수동2가 · 4층 루프탑', 37.54400, 127.05620),
-    ('성수 공유주방 키친랩', '서울 성동구 성수동2가 · 1층', 37.54520, 127.05480),
-    ('뚝섬역 코워킹 스튜디오', '서울 성동구 성수동1가 · 6층', 37.54740, 127.04730),
-    ('서울숲 피크닉 광장', '서울 성동구 성수동1가 · 서울숲', 37.54440, 127.03750),
-    ('판교역 스타트업 라운지', '경기 성남시 분당구 · 3층', 37.39490, 127.11060),
-    ('연남동 북카페 골목', '서울 마포구 연남동 · 2층', 37.56300, 126.92480),
-  ];
-
-  /// 개발용 가상 위치(이름, 위도, 경도)
-  static const locationPresets = <(String, double, double)>[
-    ('성수 워크라운지 앞', 37.54425, 127.05560),
-    ('판교 컨퍼런스장', 37.39460, 127.11100),
-    ('연남동', 37.56280, 126.92530),
-    ('강남 스타트업 허브(빈 방)', 37.50050, 127.03630),
-    ('제주(주변에 방 없음)', 33.49960, 126.53120),
+  /// 사용자들이 입력해 둔 장소. 같은 장소를 입력하면 이 카드들이 보인다.
+  static const spots = <Spot>[
+    Spot(id: 'seongsu', name: '성수 워크라운지', creatorUid: 'u-yuna'),
+    Spot(id: 'seongsu-popup', name: '연무장길 팝업 스토어', creatorUid: 'u-minseo'),
+    Spot(id: 'pangyo-conf', name: '판교 프로덕트 컨퍼런스', creatorUid: 'u-kang'),
+    Spot(id: 'yeonnam', name: '연남 코워킹 하우스', creatorUid: 'u-eunbi'),
+    Spot(id: 'sinchon-lib', name: '신촌 중앙도서관', creatorUid: 'u-nari'),
   ];
 
   static const users = <AppUser>[
@@ -209,6 +116,19 @@ abstract final class DemoSeed {
       consentedAt: null,
     ),
     AppUser(
+      uid: 'u-hana',
+      nickname: '하나',
+      jobTag: JobTag.designer,
+      consentedAt: null,
+      goodReviewCount: 2,
+    ),
+    AppUser(
+      uid: 'u-junho',
+      nickname: '준호',
+      jobTag: JobTag.student,
+      consentedAt: null,
+    ),
+    AppUser(
       uid: 'u-left',
       nickname: '시우',
       jobTag: JobTag.developer,
@@ -217,7 +137,7 @@ abstract final class DemoSeed {
     ),
   ];
 
-  /// (uid, spotId, 주제, 카테고리, 체크인 후 지난 분, 남은 분)
+  /// (uid, spotId, 주제, 카테고리, 체크인 후 지난 분, 예비)
   static const _cards = <(String, String, String, TopicCategory, int, int)>[
     (
       'u-doyun',
@@ -240,8 +160,8 @@ abstract final class DemoSeed {
     ('u-sora', 'seongsu', '프리랜서 첫 계약서 같이 봐주실 분', TopicCategory.career, 90, 30),
     ('u-taeo', 'seongsu', '성수 점심 맛집 공유해요', TopicCategory.culture, 15, 45),
     ('u-yuna', 'seongsu', 'PM 커리어 피벗 얘기 나눠요', TopicCategory.career, 5, 115),
-    ('u-sora', 'seongsu-book', '사이드 프로젝트 같이 고민해요', TopicCategory.dev, 20, 100),
-    ('u-taeo', 'seongsu-book', '요즘 읽는 책 얘기해요', TopicCategory.culture, 35, 85),
+    ('u-hana', 'seongsu', '사이드 프로젝트 같이 고민해요', TopicCategory.dev, 20, 100),
+    ('u-junho', 'seongsu', '요즘 읽는 책 얘기해요', TopicCategory.culture, 35, 85),
     (
       'u-minseo',
       'seongsu-popup',
@@ -284,7 +204,7 @@ abstract final class DemoSeed {
   ];
 
   static List<Checkin> checkins(DateTime now) => [
-    for (final (i, (uid, spotId, topic, category, ago, left)) in _cards.indexed)
+    for (final (i, (uid, spotId, topic, category, ago, _)) in _cards.indexed)
       () {
         final u = users.firstWhere((u) => u.uid == uid);
         return Checkin(
@@ -296,7 +216,6 @@ abstract final class DemoSeed {
           topic: topic,
           category: category,
           startedAt: now.subtract(Duration(minutes: ago)),
-          endsAt: now.add(Duration(minutes: left)),
           hasTrustBadge: u.hasTrustBadge,
         );
       }(),

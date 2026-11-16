@@ -29,17 +29,6 @@ enum TopicCategory {
   final String label;
 }
 
-/// 체류 시간 (US-005).
-enum StayDuration {
-  oneHour(Duration(hours: 1), '1시간'),
-  twoHours(Duration(hours: 2), '2시간'),
-  threeHours(Duration(hours: 3), '3시간');
-
-  const StayDuration(this.duration, this.label);
-  final Duration duration;
-  final String label;
-}
-
 /// 신고 사유 (US-010).
 enum ReportReason {
   sales('영업'),

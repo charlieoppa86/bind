@@ -8,10 +8,7 @@ import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/chat/presentation/chat_list_screen.dart';
 import '../../features/chat/presentation/chat_review_dialog.dart';
 import '../../features/chat/presentation/chat_room_screen.dart';
-import '../../features/checkin/presentation/room_create_screen.dart';
-import '../../features/checkin/presentation/room_pin_screen.dart';
 import '../../features/checkin/presentation/spot_select_screen.dart';
-import '../../features/checkin/presentation/spot_verify_screen.dart';
 import '../../features/checkin/presentation/topic_examples_sheet.dart';
 import '../../features/checkin/presentation/topic_setup_screen.dart';
 import '../../features/guide/presentation/guide_screens.dart';
@@ -109,32 +106,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         redirect: (_, state) =>
             state.uri.path == Routes.checkin ? Routes.checkinSpots : null,
         routes: [
-          GoRoute(
-            path: 'spots',
-            builder: (_, _) => const SpotSelectScreen(),
-            routes: [
-              GoRoute(
-                path: ':spotId/verify',
-                builder: (_, state) =>
-                    SpotVerifyScreen(spotId: state.pathParameters['spotId']!),
-              ),
-            ],
-          ),
-          GoRoute(
-            path: 'create',
-            builder: (_, _) => const RoomCreateScreen(),
-            routes: [
-              GoRoute(
-                path: ':spotId/pin',
-                builder: (_, state) =>
-                    RoomPinScreen(spotId: state.pathParameters['spotId']!),
-              ),
-            ],
-          ),
+          GoRoute(path: 'spots', builder: (_, _) => const SpotSelectScreen()),
           GoRoute(
             path: 'topic',
             builder: (_, state) => TopicSetupScreen(
-              spotId: state.uri.queryParameters['spotId'],
               editId: state.uri.queryParameters['edit'],
               add: state.uri.queryParameters['add'] == '1',
             ),

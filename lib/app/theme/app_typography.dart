@@ -76,7 +76,7 @@ abstract final class AppTypography {
     color: AppColors.body,
   );
 
-  /// 메타데이터(직무 태그·남은 시간) 12/500.
+  /// 메타데이터(직무 태그·시간) 12/500.
   static const caption = TextStyle(
     fontFamily: fontFamily,
     fontSize: 12,

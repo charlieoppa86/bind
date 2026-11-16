@@ -27,8 +27,8 @@
 - 색·글꼴·간격은 `AppColors` / `AppTypography` / `AppSpacing` / `AppRadius`만 사용한다. `primary`는 행동·선택에만.
 - 앱은 **다크 모드 기본**이다(`AppColors` 값이 다크 팔레트). `heading`을 배경으로 쓰지 말고 띄울 면은 `elevated`를 쓴다. 자세한 값은 docs/DESIGN.md "다크 모드 기본".
 - 연애·만남 카테고리는 영구 제외(US-W08).
-- 위치(GPS)는 **주변 방(반경 `AppLimits.roomRadiusMeters`=200m) 판정에만** 쓰고 서버에 저장하지 않는다. (2026-11-15 결정으로 US-W01 "위치 수집 금지"를 대체. 출시 전 위치기반서비스사업자 신고·법률 검토 필요 — 전략 문서 8장)
-- 방은 사용자가 장소에 연다. 개설자가 입장 PIN을 만들고, PIN은 개설자 화면에만 보인다. 다른 사람은 반경 안에 있고 PIN을 알아야 입장한다.
+- **위치(GPS)·PIN·체류 시간 제한은 없다**(2026-11-16 결정). 체크인은 한 화면에서 장소 이름을 자유롭게 입력하고 주제 한 줄을 올리면 끝난다.
+- 같은 장소 판정은 장소 이름(띄어쓰기·대소문자 무시, `Spot.key`)이 같은지로 한다. 입력하는 동안 이미 있는 장소를 추천해 같은 이름으로 모이게 한다. 체크아웃할 때까지 카드가 보인다.
 - 신뢰가 필요한 값(정지 여부, 신고 누적, 좋았어요 수, 신청 만료, 채팅방 생성)은 클라이언트가 아니라 Cloud Functions가 쓴다.
 - 지금은 **데모 모드**다. 모든 화면이 `lib/data/demo/demo_store.dart`(`demoStoreProvider`, 메모리 저장소)를 읽고 쓴다. 더미 데이터·시나리오(상대 수락·답장·신청 도착 지연)는 `demo_seed.dart`에 있다. Firebase 연결 시 화면 코드의 `TODO(firebase)` 위치를 Firestore/Functions 호출로 바꾼다.
 - 세션(`lib/features/session/session.dart`)은 라우터 가드의 기준이다. 데모 저장소가 로그인·온보딩·체크인 시 세션을 갱신한다. Firebase 연결 시 이 Notifier만 교체하면 라우터 가드는 그대로 동작한다.

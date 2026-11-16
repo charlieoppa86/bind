@@ -3,7 +3,7 @@ import 'firestore_utils.dart';
 
 /// `checkins/{checkinId}` — 스팟 피드에 노출되는 "주제 카드".
 ///
-/// 카드에는 닉네임·직무·주제·남은 시간만 보인다(US-006).
+/// 카드에는 닉네임·직무·주제만 보인다(US-006).
 /// 피드 조회 시 닉네임/직무를 매번 조인하지 않도록 비정규화해 둔다.
 class Checkin {
   const Checkin({
@@ -15,7 +15,6 @@ class Checkin {
     required this.topic,
     required this.category,
     required this.startedAt,
-    required this.endsAt,
     this.checkedOutAt,
     this.hasTrustBadge = false,
     this.notifyWhenSomeoneArrives = false,
@@ -34,7 +33,6 @@ class Checkin {
       TopicCategory.other,
     ),
     startedAt: toDateTime(map['startedAt']) ?? DateTime.now(),
-    endsAt: toDateTime(map['endsAt']) ?? DateTime.now(),
     checkedOutAt: toDateTime(map['checkedOutAt']),
     hasTrustBadge: map['hasTrustBadge'] as bool? ?? false,
     notifyWhenSomeoneArrives: map['notifyWhenSomeoneArrives'] as bool? ?? false,
@@ -48,24 +46,18 @@ class Checkin {
   final String topic;
   final TopicCategory category;
   final DateTime startedAt;
-  final DateTime endsAt;
   final DateTime? checkedOutAt;
   final bool hasTrustBadge;
 
   /// US-015 "누가 오면 알려줘"
   final bool notifyWhenSomeoneArrives;
 
-  bool isActiveAt(DateTime now) => checkedOutAt == null && now.isBefore(endsAt);
-
-  Duration remaining(DateTime now) {
-    final d = endsAt.difference(now);
-    return d.isNegative ? Duration.zero : d;
-  }
+  /// 체류 시간 제한이 없다. 체크아웃 전까지 보인다.
+  bool isActiveAt(DateTime now) => checkedOutAt == null;
 
   Checkin copyWith({
     String? topic,
     TopicCategory? category,
-    DateTime? endsAt,
     DateTime? checkedOutAt,
     bool? notifyWhenSomeoneArrives,
   }) => Checkin(
@@ -77,7 +69,6 @@ class Checkin {
     topic: topic ?? this.topic,
     category: category ?? this.category,
     startedAt: startedAt,
-    endsAt: endsAt ?? this.endsAt,
     checkedOutAt: checkedOutAt ?? this.checkedOutAt,
     hasTrustBadge: hasTrustBadge,
     notifyWhenSomeoneArrives:
@@ -92,7 +83,6 @@ class Checkin {
     'topic': topic,
     'category': category.name,
     'startedAt': toTimestamp(startedAt),
-    'endsAt': toTimestamp(endsAt),
     'checkedOutAt': toTimestamp(checkedOutAt),
     'notifyWhenSomeoneArrives': notifyWhenSomeoneArrives,
   };

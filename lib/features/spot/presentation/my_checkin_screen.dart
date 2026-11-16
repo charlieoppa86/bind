@@ -11,7 +11,6 @@ import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../data/demo/demo_store.dart';
-import '../../checkin/presentation/room_pin_screen.dart';
 import '../../my/presentation/plus_prompt.dart';
 
 /// 스팟 > 스팟 피드 > 내 체크인 (US-011)
@@ -60,7 +59,7 @@ class MyCheckinScreen extends ConsumerWidget {
     final now = DateTime.now();
     final mine = db.myCheckins(now);
     if (mine.isEmpty) {
-      // 체류 시간이 끝나 자동 체크아웃된 경우 등: 이 화면을 떠난다.
+      // 체크아웃된 경우: 이 화면을 떠난다.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) context.go(Routes.checkinSpots);
       });
@@ -68,9 +67,7 @@ class MyCheckinScreen extends ConsumerWidget {
     }
     final first = mine.first;
     final spot = db.spot(first.spotId);
-    final total = first.endsAt.difference(first.startedAt).inSeconds;
-    final left = first.remaining(now);
-    final progress = total == 0 ? 0.0 : left.inSeconds / total;
+    final others = db.headcount(first.spotId, now) - 1;
 
     return Scaffold(
       backgroundColor: AppColors.groupedBackground,
@@ -93,67 +90,24 @@ class MyCheckinScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      MetaLabel(spot?.name ?? '', icon: Icons.place_outlined),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        TimeFormat.remaining(left),
-                        style: AppTypography.display.copyWith(fontSize: 30),
+                      MetaLabel(
+                        '${TimeFormat.clock(first.startedAt)}부터 체크인 중',
+                        icon: Icons.place_outlined,
                       ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(spot?.name ?? '', style: AppTypography.display),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        '${TimeFormat.clock(first.endsAt)}에 자동으로 체크아웃돼요',
+                        others > 0
+                            ? '나 말고 $others명이 같은 장소에 있어요'
+                            : '아직 같은 장소에 다른 사람이 없어요',
                         style: AppTypography.body.copyWith(
                           color: AppColors.secondary,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(AppRadius.full),
-                        child: LinearProgressIndicator(
-                          value: progress.clamp(0, 1),
-                          minHeight: 8,
-                          color: AppColors.primary,
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (db.isCreator(first.spotId)) ...[
-                  const SizedBox(height: AppSpacing.sm + 2),
-                  SectionCard(
-                    onTap: () => showRoomPinSheet(context, first.spotId),
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Row(
-                      children: [
-                        const IconTile(
-                          Icons.key_rounded,
-                          color: AppColors.primarySoft,
-                          iconColor: AppColors.primary,
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '입장 PIN ${db.spotCodes[first.spotId] ?? ''}',
-                                style: AppTypography.subtitle,
-                              ),
-                              const Text(
-                                '내가 연 방이에요 · 눌러서 크게 보기·다시 만들기',
-                                style: AppTypography.caption,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.tertiary,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
                 SectionLabel(
                   '내 주제 ${mine.length}/${db.topicLimit}',
                   trailing: TextButton.icon(
@@ -228,7 +182,7 @@ class MyCheckinScreen extends ConsumerWidget {
                     horizontal: AppSpacing.page,
                   ),
                   child: Text(
-                    '같은 공간 사람들에게는 닉네임·하는 일·주제·남은 시간만 보여요.',
+                    '같은 장소 사람들에게는 닉네임·하는 일·주제만 보여요.',
                     style: AppTypography.caption,
                   ),
                 ),

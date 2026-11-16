@@ -554,7 +554,7 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-/// 단일 선택 칩(직무·카테고리·체류 시간·필터). 선택되면 파란 면.
+/// 단일 선택 칩(직무·카테고리·필터). 선택되면 파란 면.
 class SelectChip extends StatelessWidget {
   const SelectChip({
     required this.label,
@@ -569,7 +569,7 @@ class SelectChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  /// 가로로 꽉 채움(체류 시간처럼 균등 분할할 때)
+  /// 가로로 꽉 채움(균등 분할할 때)
   final bool expand;
   final bool compact;
 

@@ -430,7 +430,7 @@ Wanted's official system language is practical, encouraging, and centered on hel
 | `AppRadius.button / section / sheet` | 16 / 20 / 24 | 큰 CTA / 흰 섹션 카드 / 바텀시트 |
 | `AppSpacing.page / ctaHeight` | 24 / 56 | 화면 좌우 여백 / 큰 CTA 높이 |
 
-패턴: 회색 배경 위 흰 섹션 카드(그림자 없음), 누르면 0.98로 살짝 줄어드는 탭 영역(`Pressable`), 선택 칩은 알약 모양(`SelectChip`), 확인 다이얼로그는 나란한 두 버튼(`showConfirm`), PIN은 시스템 키보드 대신 화면 키패드(`PinPad`).
+패턴: 회색 배경 위 흰 섹션 카드(그림자 없음), 누르면 0.98로 살짝 줄어드는 탭 영역(`Pressable`), 선택 칩은 알약 모양(`SelectChip`), 확인 다이얼로그는 나란한 두 버튼(`showConfirm`).
 
 ## 다크 모드 기본 (2026-11-16)
 
@@ -451,3 +451,13 @@ Wanted's official system language is practical, encouraging, and centered on hel
 | `shadow` (신설) | `#000000` | 그림자는 항상 검정 |
 
 규칙: `heading`을 배경으로 쓰고 그 위에 흰 글자를 올리지 않는다(다크에서는 흰 바탕에 흰 글자가 된다). 띄울 면은 `elevated`, 강조 버튼은 `primary`를 쓴다. 내 채팅 말풍선은 `primary`. 상태바·내비게이션 바는 밝은 아이콘(`AppTheme.systemOverlay`), Android 시작 화면도 `#17171C`.
+
+## Google 로그인 버튼 (2026-11-16)
+
+[Google 브랜드 가이드라인](https://developers.google.com/identity/branding-guidelines)을 따르는 `GoogleSignInButton`(`lib/core/widgets/google_sign_in_button.dart`)만 쓴다. 앱 토큰으로 바꾸지 않는다.
+
+- Dark 테마: 바탕 `#131314`, 안쪽 1px 테두리 `#8E918F`, 글자 `#E3E3E3` (`AppColors.googleDark*`), 알약 모양
+- 로고: 공식 에셋(signin-assets.zip, Dark·아이콘 PNG)에서 "G" 부분만 잘라 `assets/images/google_g_dark.png`(1x~4x)로 둔다. 재채색·변형·직접 그린 G 금지
+- 여백: Android 12 / 로고 뒤 10 / 12, iOS 16 / 12 / 16. 글자 14/20 Medium(Google Sans는 한글이 없어 Pretendard)
+- 문구: "Google로 로그인"(가이드 권장 문구 "Sign in with Google"의 한국어. Google 계정을 새로 만드는 게 아니라 Google 계정으로 이 앱에 들어간다는 뜻)
+- iOS의 Apple 버튼과 같은 높이·모양으로 두어 Google 버튼이 덜 눈에 띄지 않게 한다

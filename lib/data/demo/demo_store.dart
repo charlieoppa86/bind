@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/router/routes.dart';
 import '../../core/constants/app_limits.dart';
 import '../../core/constants/enums.dart';
-import '../../core/location/location.dart';
 import '../../core/notice/in_app_notice.dart';
-import '../../core/utils/geo.dart';
 import '../../core/utils/korean_search.dart';
 import '../../features/session/session.dart';
 import '../models/app_user.dart';
@@ -28,8 +25,7 @@ import 'demo_seed.dart';
 class DemoDb {
   DemoDb._seed(DateTime now)
     : users = {for (final u in DemoSeed.users) u.uid: u},
-      spots = [for (final (s, _) in DemoSeed.spots) s],
-      spotCodes = {for (final (s, c) in DemoSeed.spots) s.id: c},
+      spots = [...DemoSeed.spots],
       checkins = DemoSeed.checkins(now),
       requests = DemoSeed.sentHistory(now),
       recentTopics = [...DemoSeed.recentTopics] {
@@ -52,7 +48,9 @@ class DemoDb {
 
   final Map<String, AppUser> users;
   final List<Spot> spots;
-  final Map<String, String> spotCodes;
+
+  /// 최근 체크인한 장소 id(최신순)
+  final List<String> recentSpotIds = [];
   final List<Checkin> checkins;
   final List<ChatRequest> requests;
   late final List<Chat> chats;
@@ -62,9 +60,6 @@ class DemoDb {
   final Map<String, Block> blocks = {};
   final Set<String> reportedUids = {};
   final List<(String, TopicCategory)> recentTopics;
-
-  /// spotId → (틀린 횟수, 잠금 해제 시각)
-  final Map<String, (int, DateTime?)> codeAttempts = {};
 
   int _seq = 0;
   String nextId(String prefix) => '$prefix-${++_seq}';
@@ -77,26 +72,25 @@ class DemoDb {
 
   bool isCreator(String spotId) => spot(spotId)?.creatorUid == myUid;
 
-  /// [at] 주변의 방과 거리(m), 가까운 순. [AppLimits.nearbyListMeters] 안만.
-  List<(Spot, double)> nearby(GeoPoint at) =>
-      [
-          for (final s in spots)
-            if (s.active) (s, at.distanceTo(GeoPoint(s.latitude, s.longitude))),
-        ].where((e) => e.$2 <= AppLimits.nearbyListMeters).toList()
-        ..sort((a, b) => a.$2.compareTo(b.$2));
+  /// 입력한 이름과 같은 장소(띄어쓰기·대소문자 무시)
+  Spot? spotByName(String name) {
+    final key = Spot.keyOf(name);
+    return spots.where((s) => s.active && s.key == key).firstOrNull;
+  }
 
-  /// 방을 열 장소 찾기(이름·주소, 초성 포함), 가까운 순.
-  List<NearbyPlace> searchPlaces(String query, GeoPoint at) => [
-    for (final (name, address, lat, lng) in DemoSeed.places)
-      if (KoreanSearch.matches(name, query) ||
-          KoreanSearch.matches(address, query))
-        NearbyPlace(
-          name: name,
-          address: address,
-          point: GeoPoint(lat, lng),
-          distance: at.distanceTo(GeoPoint(lat, lng)),
-        ),
-  ]..sort((a, b) => a.distance.compareTo(b.distance));
+  /// 장소 이름 자동완성: 이미 누군가 입력한 장소 중 비슷한 것, 사람 많은 순
+  List<Spot> suggestSpots(String query, DateTime now) => [
+    for (final s in spots)
+      if (s.active && KoreanSearch.matches(s.name, query)) s,
+  ]..sort((a, b) => headcount(b.id, now).compareTo(headcount(a.id, now)));
+
+  /// 지금 사람이 있는 장소(사람 많은 순)
+  List<Spot> activeSpots(DateTime now) => [
+    for (final s in suggestSpots('', now))
+      if (headcount(s.id, now) > 0) s,
+  ];
+
+  List<Spot> get recentSpots => [for (final id in recentSpotIds) ?spot(id)];
 
   bool isBlocked(String uid) => blocks.containsKey(uid);
 
@@ -105,7 +99,7 @@ class DemoDb {
       if (c.uid == myUid && c.isActiveAt(now)) c,
   ];
 
-  /// 같은 스팟의 다른 사람 카드(차단 제외, 체류 종료 제외)
+  /// 같은 장소의 다른 사람 카드(차단·체크아웃 제외)
   List<Checkin> feed(String spotId, DateTime now) => [
     for (final c in checkins)
       if (c.spotId == spotId &&
@@ -191,48 +185,6 @@ class DemoDb {
   Checkin? checkin(String id) => checkins.where((c) => c.id == id).firstOrNull;
 }
 
-/// 스팟 코드 확인 결과
-sealed class CodeResult {
-  const CodeResult();
-}
-
-class CodeOk extends CodeResult {
-  const CodeOk();
-}
-
-class CodeWrong extends CodeResult {
-  const CodeWrong(this.attemptsLeft);
-  final int attemptsLeft;
-}
-
-/// 방 반경 밖에서 입장하려고 함
-class CodeTooFar extends CodeResult {
-  const CodeTooFar(this.meters);
-  final double meters;
-}
-
-/// 방을 열 수 있는 장소
-class NearbyPlace {
-  const NearbyPlace({
-    required this.name,
-    required this.address,
-    required this.point,
-    required this.distance,
-  });
-
-  final String name;
-  final String address;
-  final GeoPoint point;
-  final double distance;
-
-  bool get inRange => distance <= AppLimits.roomRadiusMeters;
-}
-
-class CodeLocked extends CodeResult {
-  const CodeLocked(this.until);
-  final DateTime until;
-}
-
 enum SendRequestResult { sent, duplicate, dailyLimit, notCheckedIn }
 
 class DemoStore extends Notifier<DemoDb> {
@@ -241,10 +193,6 @@ class DemoStore extends Notifier<DemoDb> {
 
   @override
   DemoDb build() {
-    // 체크인한 방에서 반경 밖으로 나가면 자동 체크아웃
-    ref.listen(locationProvider, (_, loc) {
-      if (loc.point != null) _onMoved(loc.point!);
-    });
     ref.onDispose(() {
       for (final t in _timers) {
         t.cancel();
@@ -274,14 +222,10 @@ class DemoStore extends Notifier<DemoDb> {
     _timers.add(t);
   }
 
-  /// 15초마다: 신청 만료(30분), 체류 시간 종료 처리.
+  /// 15초마다: 신청 만료(30분) 처리.
   /// 실제 서비스에서는 Cloud Functions 스케줄러가 한다.
   void _tick() {
     final now = _now;
-    // 체크인 중이면 위치를 다시 읽어 반경을 벗어났는지 본다(_onMoved).
-    if (_db.myCheckins(now).isNotEmpty) {
-      ref.read(locationProvider.notifier).refresh();
-    }
     for (final (i, r) in _db.requests.indexed.toList()) {
       if (r.status == ChatRequestStatus.pending && now.isAfter(r.expiresAt)) {
         _db.requests[i] = r.copyWith(status: ChatRequestStatus.expired);
@@ -293,14 +237,6 @@ class DemoStore extends Notifier<DemoDb> {
           );
         }
       }
-    }
-    final mine = [
-      for (final c in _db.checkins)
-        if (c.uid == DemoDb.myUid && c.checkedOutAt == null) c,
-    ];
-    if (mine.isNotEmpty && mine.every((c) => !c.isActiveAt(now))) {
-      _checkOutAll(now);
-      _notice('머무를 시간이 끝나 내 카드가 내려갔어요');
     }
     _commit();
   }
@@ -368,7 +304,6 @@ class DemoStore extends Notifier<DemoDb> {
     topic: c.topic,
     category: c.category,
     startedAt: c.startedAt,
-    endsAt: c.endsAt,
     checkedOutAt: c.checkedOutAt,
     hasTrustBadge: me.hasTrustBadge,
     notifyWhenSomeoneArrives: c.notifyWhenSomeoneArrives,
@@ -389,120 +324,49 @@ class DemoStore extends Notifier<DemoDb> {
 
   // ── 체크인 ──────────────────────────────────────────
 
-  /// 입장 PIN 확인. 방 반경 안([at])에 있어야 한다.
-  CodeResult verifyCode(String spotId, String code, {required GeoPoint? at}) {
-    final now = _now;
-    final room = _db.spot(spotId);
-    if (room != null) {
-      final d = at?.distanceTo(GeoPoint(room.latitude, room.longitude));
-      if (d == null || d > AppLimits.roomRadiusMeters) {
-        return CodeTooFar(d ?? double.infinity);
-      }
-    }
-    final (fails, lockedUntil) = _db.codeAttempts[spotId] ?? (0, null);
-    if (lockedUntil != null && now.isBefore(lockedUntil)) {
-      return CodeLocked(lockedUntil);
-    }
-    if (_db.spotCodes[spotId] == code) {
-      _db.codeAttempts.remove(spotId);
-      _commit();
-      return const CodeOk();
-    }
-    final nextFails = (lockedUntil != null ? 0 : fails) + 1;
-    if (nextFails >= AppLimits.spotCodeMaxAttempts) {
-      final until = now.add(AppLimits.spotCodeLockDuration);
-      _db.codeAttempts[spotId] = (0, until);
-      _commit();
-      return CodeLocked(until);
-    }
-    _db.codeAttempts[spotId] = (nextFails, null);
-    _commit();
-    return CodeWrong(AppLimits.spotCodeMaxAttempts - nextFails);
-  }
-
+  /// 장소 이름을 입력해 체크인한다. 같은 이름의 장소가 있으면 거기로, 없으면 새로 연다.
+  /// TODO(firebase): spots(이름 키로 찾기/만들기) + checkins 문서 생성
   void checkIn({
-    required String spotId,
+    required String placeName,
     required String topic,
     required TopicCategory category,
-    required StayDuration stay,
   }) {
     final me = _db.me!;
     final now = _now;
+    final spot = _db.spotByName(placeName) ?? _openSpot(placeName, now);
     final checkin = Checkin(
       id: _db.nextId('my-checkin'),
       uid: DemoDb.myUid,
-      spotId: spotId,
+      spotId: spot.id,
       nickname: me.nickname,
       jobTag: me.jobTag,
       topic: topic.trim(),
       category: category,
       startedAt: now,
-      endsAt: now.add(stay.duration),
       hasTrustBadge: me.hasTrustBadge,
     );
     _db.checkins.add(checkin);
     _rememberTopic(topic.trim(), category);
-
+    _db.recentSpotIds
+      ..remove(spot.id)
+      ..insert(0, spot.id);
+    if (_db.recentSpotIds.length > AppLimits.recentPlacesCount) {
+      _db.recentSpotIds.removeLast();
+    }
     _commit();
-    _session.checkedIn(checkinId: checkin.id, spotId: spotId);
+    _session.checkedIn(checkinId: checkin.id, spotId: spot.id);
     _scheduleIncoming(checkin);
   }
 
-  /// 장소에 새 방을 연다. 개설자(나)가 입장 PIN을 받는다. 방 id를 돌려준다.
-  /// TODO(firebase): Functions callable로 방 생성 + PIN 발급(반경 검증 포함)
-  String createRoom({
-    required String name,
-    required String address,
-    required GeoPoint point,
-  }) {
-    final id = _db.nextId('room');
-    _db.spots.add(
-      Spot(
-        id: id,
-        name: name.trim(),
-        address: address,
-        latitude: point.latitude,
-        longitude: point.longitude,
-        creatorUid: DemoDb.myUid,
-        createdAt: _now,
-      ),
+  Spot _openSpot(String name, DateTime now) {
+    final spot = Spot(
+      id: _db.nextId('spot'),
+      name: name.trim(),
+      creatorUid: DemoDb.myUid,
+      createdAt: now,
     );
-    _db.spotCodes[id] = _newPin();
-    _commit();
-    return id;
-  }
-
-  /// 개설자만: PIN을 새로 만든다(이전 PIN은 더 이상 안 됨).
-  void regeneratePin(String spotId) {
-    if (!_db.isCreator(spotId)) return;
-    _db.spotCodes[spotId] = _newPin();
-    _commit();
-  }
-
-  String _newPin() {
-    final r = math.Random();
-    String pin;
-    do {
-      pin = List.generate(
-        AppLimits.spotCodeLength,
-        (_) => r.nextInt(10),
-      ).join();
-    } while (_db.spotCodes.containsValue(pin));
-    return pin;
-  }
-
-  void _onMoved(GeoPoint at) {
-    final mine = _db.myCheckins(_now);
-    if (mine.isEmpty) return;
-    final room = _db.spot(mine.first.spotId);
-    if (room == null) return;
-    final d = at.distanceTo(GeoPoint(room.latitude, room.longitude));
-    if (d <= AppLimits.roomRadiusMeters) return;
-    _checkOutAll(_now);
-    _commit();
-    _notice(
-      '${room.name}에서 ${AppLimits.roomRadiusMeters.round()}m 넘게 벗어나 체크아웃됐어요',
-    );
+    _db.spots.add(spot);
+    return spot;
   }
 
   void addTopic(String topic, TopicCategory category) {
@@ -518,7 +382,6 @@ class DemoStore extends Notifier<DemoDb> {
         topic: topic.trim(),
         category: category,
         startedAt: _now,
-        endsAt: first.endsAt,
         hasTrustBadge: me.hasTrustBadge,
       ),
     );
@@ -607,7 +470,6 @@ class DemoStore extends Notifier<DemoDb> {
           topic: topic,
           category: category,
           startedAt: t,
-          endsAt: t.add(StayDuration.twoHours.duration),
           hasTrustBadge: u.hasTrustBadge,
         ),
       );

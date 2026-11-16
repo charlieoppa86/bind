@@ -5,10 +5,10 @@ import 'package:material_ui/material_ui.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
-import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/bind_logo.dart';
+import '../../../core/widgets/google_sign_in_button.dart';
 import '../../../data/demo/demo_store.dart';
 
 /// 인증 > 로그인 (US-001). Android: 구글 / iOS: 구글·애플
@@ -38,31 +38,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: AppSpacing.xl),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.page),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: BindLogo(size: 28),
+            // 위 여백 : 소개 : 사이 여백 : 카드 영역 비율로 세로 배치
+            const Spacer(flex: 3),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.page),
+              child: Column(
+                children: [
+                  const BindLogo(size: 32),
+                  const SizedBox(height: AppSpacing.lg),
+                  const Text(
+                    '같은 공간에서\n같은 관심사로',
+                    style: AppTypography.display,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    '지금 있는 장소를 적고 주제 한 줄을 올리면\n같은 장소 사람과 대화를 나눌 수 있어요.',
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: AppColors.secondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
-            PageHeader(
-              title: '같은 공간에서\n같은 관심사로',
-              description:
-                  '반경 ${AppLimits.roomRadiusMeters.round()}m 안에 있는 사람의 주제 한 줄을 보고\n수락받으면 1:1 대화가 열려요.',
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.page,
-                AppSpacing.lg,
-                AppSpacing.page,
-                0,
-              ),
-            ),
-            const Expanded(child: _CardPreview()),
+            const Spacer(flex: 1),
+            const Expanded(flex: 9, child: _CardPreview()),
             BottomCta(
+              // Google 가이드: Google 버튼은 다른 로그인 버튼과 크기·무게가 비슷해야 한다.
               top: isIos
                   ? FilledButton.icon(
                       onPressed: _loading ? null : _signIn,
                       style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: const StadiumBorder(),
                         backgroundColor: AppColors.heading,
                         foregroundColor: AppColors.canvas,
                       ),
@@ -73,21 +82,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  isIos
-                      ? OutlinedButton(
-                          onPressed: _loading ? null : _signIn,
-                          child: _GoogleLabel(loading: _loading),
-                        )
-                      : FilledButton(
-                          onPressed: _loading ? null : _signIn,
-                          child: _GoogleLabel(
-                            loading: _loading,
-                            onPrimary: true,
-                          ),
-                        ),
+                  GoogleSignInButton(onPressed: _signIn, loading: _loading),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    '계속하면 이용약관·개인정보 처리방침에 동의하게 돼요. 위치는 주변 방을 찾을 때만 쓰고 저장하지 않아요.',
+                    '계속하면 이용약관·개인정보 처리방침에 동의하게 돼요.',
                     style: AppTypography.caption.copyWith(
                       color: AppColors.tertiary,
                     ),
@@ -99,51 +97,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _GoogleLabel extends StatelessWidget {
-  const _GoogleLabel({required this.loading, this.onPrimary = false});
-
-  final bool loading;
-  final bool onPrimary;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = onPrimary ? AppColors.onPrimary : AppColors.heading;
-    if (loading) {
-      return SizedBox(
-        width: 22,
-        height: 22,
-        child: CircularProgressIndicator(
-          strokeWidth: 2.4,
-          color: AppColors.tertiary,
-        ),
-      );
-    }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            color: AppColors.onPrimary,
-            shape: BoxShape.circle,
-          ),
-          child: Text(
-            'G',
-            style: AppTypography.supportingTitle.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Text('Google로 시작하기', style: TextStyle(color: color)),
-      ],
     );
   }
 }
@@ -165,6 +118,10 @@ class _CardPreview extends StatelessWidget {
       builder: (context, c) {
         final h = c.maxHeight;
         if (h < 180) return const SizedBox.shrink();
+        // 카드 3장 묶음을 영역 가운데에 둔다.
+        const cardHeight = 72.0;
+        final step = (h - cardHeight) / 2 > 96 ? 96.0 : (h - cardHeight) / 2;
+        final top = (h - (step * 2 + cardHeight)) / 2;
         return Stack(
           children: [
             for (final (i, (name, job, topic, emoji, angle, dx))
@@ -172,7 +129,7 @@ class _CardPreview extends StatelessWidget {
               Positioned(
                 left: AppSpacing.page + dx,
                 right: AppSpacing.page + 28 - dx,
-                top: h * 0.12 + i * (h * 0.24),
+                top: top + i * step,
                 child: Transform.rotate(
                   angle: angle,
                   child: Container(

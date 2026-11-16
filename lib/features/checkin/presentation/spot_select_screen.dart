@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -7,17 +8,17 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
-import '../../../core/location/location.dart';
-import '../../../core/utils/geo.dart';
+import '../../../core/constants/enums.dart';
+import '../../../core/constants/topic_content.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../../data/models/spot.dart';
-import 'location_bar.dart';
 
-/// 체크인 > 내 주변 방 (US-004). 체크인 전 홈.
+/// 체크인 (US-004, US-005). 체크인 전 홈.
 ///
-/// 현재 위치 반경 [AppLimits.roomRadiusMeters] 안에 열린 방에만 입장할 수 있다.
-/// 입장하려면 방을 연 사람이 만든 PIN이 필요하다. 주변에 방이 없으면 새로 연다.
+/// 한 화면에서 장소를 자유롭게 입력하고 주제 한 줄을 올리면 끝.
+/// 같은 장소를 입력한 사람끼리 서로의 카드를 보고 대화를 신청한다.
+/// 입력하는 동안 다른 사람이 이미 입력한 장소를 추천해 같은 이름으로 모이게 한다.
 class SpotSelectScreen extends ConsumerStatefulWidget {
   const SpotSelectScreen({super.key});
 
@@ -26,54 +27,76 @@ class SpotSelectScreen extends ConsumerStatefulWidget {
 }
 
 class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
+  final _place = TextEditingController();
+  final _placeFocus = FocusNode();
+  final _topic = TextEditingController();
+  TopicCategory? _category;
+
   @override
   void initState() {
     super.initState();
-    // 이미 권한이 있으면 바로 위치를 읽는다(권한 요청은 버튼을 눌렀을 때).
-    Future.microtask(() => ref.read(locationProvider.notifier).refresh());
+    _placeFocus.addListener(() => setState(() {}));
   }
 
-  void _enter(Spot room) {
-    final db = ref.read(demoStoreProvider);
-    // 내가 연 방은 PIN 없이 바로 주제 설정으로
-    context.push(
-      db.isCreator(room.id)
-          ? Routes.topicSetup(spotId: room.id)
-          : Routes.spotVerify(room.id),
+  @override
+  void dispose() {
+    _place.dispose();
+    _placeFocus.dispose();
+    _topic.dispose();
+    super.dispose();
+  }
+
+  void _pickPlace(String name) {
+    setState(() {
+      _place.text = name;
+      _place.selection = TextSelection.collapsed(offset: name.length);
+    });
+    _placeFocus.unfocus();
+  }
+
+  Future<void> _openExamples() async {
+    final picked = await context.push<String>(
+      Routes.topicExamples(_category!.name),
     );
+    if (picked == null) return;
+    setState(() => _topic.text = picked);
+  }
+
+  bool get _valid =>
+      _place.text.trim().length >= AppLimits.placeNameMin &&
+      _category != null &&
+      _topic.text.trim().isNotEmpty;
+
+  void _submit() {
+    HapticFeedback.mediumImpact();
+    ref
+        .read(demoStoreProvider.notifier)
+        .checkIn(
+          placeName: _place.text,
+          topic: _topic.text,
+          category: _category!,
+        );
+    context.go(Routes.spot);
   }
 
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(demoStoreProvider);
-    final loc = ref.watch(locationProvider);
     final now = DateTime.now();
     final unread = db.unreadTotal(now);
-    final radius = AppLimits.roomRadiusMeters.round();
-
-    final nearby = loc.hasPoint
-        ? db.nearby(loc.point!)
-        : const <(Spot, double)>[];
-    final inRange = [
-      for (final e in nearby)
-        if (e.$2 <= AppLimits.roomRadiusMeters) e,
-    ];
-    final outOfRange = [
-      for (final e in nearby)
-        if (e.$2 > AppLimits.roomRadiusMeters) e,
-    ];
-
-    Widget row((Spot, double) e, {required bool enabled}) => _RoomRow(
-      room: e.$1,
-      distance: e.$2,
-      headcount: db.headcount(e.$1.id, now),
-      creatorName: db.isCreator(e.$1.id)
-          ? null
-          : db.user(e.$1.creatorUid ?? '')?.nickname,
-      mine: db.isCreator(e.$1.id),
-      enabled: enabled,
-      onTap: enabled ? () => _enter(e.$1) : null,
-    );
+    final query = _place.text.trim();
+    final match = query.length >= AppLimits.placeNameMin
+        ? db.spotByName(query)
+        : null;
+    final suggestions = query.isEmpty
+        ? const <Spot>[]
+        : db.suggestSpots(query, now).where((s) => s != match).take(4).toList();
+    final quickPicks = [
+      ...db.recentSpots,
+      for (final s in db.activeSpots(now))
+        if (!db.recentSpots.contains(s)) s,
+    ].take(6).toList();
+    final people = match == null ? 0 : db.headcount(match.id, now);
 
     return Scaffold(
       appBar: AppBar(
@@ -99,207 +122,252 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: RefreshIndicator(
-              color: AppColors.primary,
-              onRefresh: () => ref.read(locationProvider.notifier).refresh(),
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                children: [
-                  PageHeader(
-                    title: '${db.me?.nickname ?? ''}님 주변\n${radius}m 안의 대화방',
-                    description:
-                        '같은 공간에 있는 사람끼리만 대화해요.\n방을 연 사람에게 PIN을 받아 입장하세요.',
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.page,
-                      0,
-                      AppSpacing.page,
-                      AppSpacing.lg,
+            child: ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.page,
+                0,
+                AppSpacing.page,
+                AppSpacing.xl,
+              ),
+              children: [
+                PageHeader(
+                  title: '${db.me?.nickname ?? ''}님,\n지금 어디에 계세요?',
+                  description: '같은 장소를 적은 사람끼리 서로의 주제를 보고 대화해요.',
+                  padding: const EdgeInsets.only(
+                    top: AppSpacing.xs,
+                    bottom: AppSpacing.xl - 8,
+                  ),
+                ),
+
+                // ── 장소 ──
+                const _Label('장소'),
+                TextField(
+                  controller: _place,
+                  focusNode: _placeFocus,
+                  maxLength: AppLimits.placeNameMax,
+                  textInputAction: TextInputAction.next,
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: AppColors.heading,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '예) 성수 워크라운지, 판교 컨퍼런스',
+                    prefixIcon: const Icon(
+                      Icons.place_outlined,
+                      color: AppColors.secondary,
+                    ),
+                    counterText: '',
+                    suffixIcon: query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: '지우기',
+                            icon: const Icon(
+                              Icons.cancel_rounded,
+                              color: AppColors.tertiary,
+                              size: 20,
+                            ),
+                            onPressed: () => setState(_place.clear),
+                          ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (match != null)
+                  _PlaceHint(
+                    icon: Icons.groups_rounded,
+                    text: people > 0
+                        ? '${match.name}에 지금 $people명이 있어요. 같은 곳으로 들어가요.'
+                        : '${match.name}로 들어가요.',
+                    active: true,
+                  )
+                else if (query.length >= AppLimits.placeNameMin)
+                  _PlaceHint(
+                    icon: Icons.add_location_alt_outlined,
+                    text: '‘$query’ 장소를 새로 열어요.',
+                    active: false,
+                  ),
+                if (suggestions.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '혹시 이 장소인가요?',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.secondary,
                     ),
                   ),
-                  const LocationBar(),
-                  const SizedBox(height: AppSpacing.sm),
-                  switch (loc.status) {
-                    LocationStatus.unknown ||
-                    LocationStatus.loading when !loc.hasPoint => const Padding(
-                      padding: EdgeInsets.all(AppSpacing.xl),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                              ),
-                            ),
-                            SizedBox(height: AppSpacing.md),
-                            Text('주변 방을 찾고 있어요', style: AppTypography.body),
-                          ],
-                        ),
-                      ),
+                  const SizedBox(height: AppSpacing.xs),
+                  for (final s in suggestions)
+                    _SuggestionRow(
+                      spot: s,
+                      people: db.headcount(s.id, now),
+                      onTap: () => _pickPlace(s.name),
                     ),
-                    LocationStatus.denied ||
-                    LocationStatus.deniedForever ||
-                    LocationStatus.serviceOff => _LocationNeeded(
-                      status: loc.status,
-                    ),
-                    _ => Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (inRange.isEmpty)
-                          EmptyState(
-                            icon: Icons.wifi_tethering_rounded,
-                            title: '주변 ${radius}m에 열린 방이 없어요',
-                            message: '지금 있는 곳에 첫 방을 열어 보세요.\n같은 공간 사람들이 PIN으로 들어올 수 있어요.',
-                          )
-                        else ...[
-                          SectionLabel('입장할 수 있는 방 ${inRange.length}'),
-                          for (final e in inRange) row(e, enabled: true),
-                        ],
-                        if (outOfRange.isNotEmpty) ...[
-                          SectionLabel('${radius}m 밖이라 입장할 수 없어요'),
-                          for (final e in outOfRange) row(e, enabled: false),
-                        ],
-                      ],
-                    ),
-                  },
                 ],
-              ),
+                if (query.isEmpty && quickPicks.isNotEmpty) ...[
+                  Wrap(
+                    spacing: AppSpacing.xs + 2,
+                    runSpacing: AppSpacing.xs + 2,
+                    children: [
+                      for (final s in quickPicks)
+                        SelectChip(
+                          label: db.headcount(s.id, now) > 0
+                              ? '${s.name} ${db.headcount(s.id, now)}'
+                              : s.name,
+                          compact: true,
+                          selected: false,
+                          onTap: () => _pickPlace(s.name),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── 주제 ──
+                const _Label('어떤 얘기를 하고 싶으세요?'),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final c in TopicCategory.values)
+                      SelectChip(
+                        label: c.label,
+                        compact: true,
+                        selected: _category == c,
+                        onTap: () => setState(() => _category = c),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: _topic,
+                  maxLength: AppLimits.topicMaxLength,
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: AppColors.heading,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: _category == null
+                        ? '주제 한 줄'
+                        : '예) ${topicExamples[_category!]!.first}',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _category == null ? null : _openExamples,
+                    icon: const Icon(Icons.lightbulb_outline, size: 16),
+                    label: const Text('예시 주제 보기'),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (loc.hasPoint)
-            BottomCta(
-              child: FilledButton.icon(
-                onPressed: () => context.push(Routes.roomCreate),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('이 근처에 새 방 열기'),
-              ),
+          BottomCta(
+            child: FilledButton(
+              onPressed: _valid ? _submit : null,
+              child: const Text('체크인하기'),
             ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _RoomRow extends StatelessWidget {
-  const _RoomRow({
-    required this.room,
-    required this.distance,
-    required this.headcount,
-    required this.creatorName,
-    required this.mine,
-    required this.enabled,
-    required this.onTap,
-  });
+class _Label extends StatelessWidget {
+  const _Label(this.text);
 
-  final Spot room;
-  final double distance;
-  final int headcount;
-  final String? creatorName;
-  final bool mine;
-  final bool enabled;
-  final VoidCallback? onTap;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final sub = [
-      formatDistance(distance),
-      if (mine) '내가 연 방' else if (creatorName != null) '$creatorName님이 연 방',
-    ].join(' · ');
-    return Opacity(
-      opacity: enabled ? 1 : 0.45,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-        child: ListRow(
-          onTap: onTap,
-          showChevron: false,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.md - 2,
-          ),
-          leading: IconTile(
-            room.isEvent ? Icons.celebration_outlined : Icons.forum_outlined,
-            size: 48,
-            color: enabled ? AppColors.primarySoft : AppColors.fill,
-            iconColor: enabled ? AppColors.primary : AppColors.secondary,
-          ),
-          title: room.name,
-          titleStyle: AppTypography.subtitle,
-          subtitle: sub,
-          trailing: !enabled
-              ? const Icon(
-                  Icons.lock_outline_rounded,
-                  color: AppColors.tertiary,
-                  size: 20,
-                )
-              : headcount == 0
-              ? const StatusPill('비어 있음', tone: PillTone.muted)
-              : StatusPill('$headcount명', tone: PillTone.active),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Text(
+        text,
+        style: AppTypography.body.copyWith(
+          color: AppColors.secondary,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 }
 
-/// 위치 권한·서비스가 없을 때 안내
-class _LocationNeeded extends ConsumerWidget {
-  const _LocationNeeded({required this.status});
+class _PlaceHint extends StatelessWidget {
+  const _PlaceHint({
+    required this.icon,
+    required this.text,
+    required this.active,
+  });
 
-  final LocationStatus status;
+  final IconData icon;
+  final String text;
+  final bool active;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.read(locationProvider.notifier);
-    final (title, message, label, action) = switch (status) {
-      LocationStatus.deniedForever => (
-        '설정에서 위치 권한을 켜 주세요',
-        '위치 권한이 꺼져 있어 주변 방을 찾을 수 없어요.',
-        '설정 열기',
-        controller.openSettings,
-      ),
-      LocationStatus.serviceOff => (
-        '기기 위치가 꺼져 있어요',
-        '기기의 위치 서비스를 켠 뒤 다시 시도해 주세요.',
-        '다시 시도',
-        () => controller.refresh(request: true),
-      ),
-      _ => (
-        '주변 방을 찾으려면\n위치 권한이 필요해요',
-        '${AppLimits.roomRadiusMeters.round()}m 안에 열린 방을 찾을 때만 쓰고, 위치는 저장하지 않아요.',
-        '위치 권한 허용',
-        () => controller.refresh(request: true),
-      ),
-    };
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: AppColors.fill,
-          borderRadius: BorderRadius.circular(AppRadius.section),
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: active ? AppColors.primary : AppColors.secondary,
         ),
-        child: Column(
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Text(
+            text,
+            style: AppTypography.caption.copyWith(
+              color: active ? AppColors.primary : AppColors.secondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SuggestionRow extends StatelessWidget {
+  const _SuggestionRow({
+    required this.spot,
+    required this.people,
+    required this.onTap,
+  });
+
+  final Spot spot;
+  final int people;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      borderRadius: AppRadius.card,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: AppSpacing.sm + 2,
+        ),
+        child: Row(
           children: [
-            const IconTile(
-              Icons.location_on_rounded,
-              size: 56,
-              color: AppColors.primarySoft,
-              iconColor: AppColors.primary,
+            const Icon(
+              Icons.place_outlined,
+              size: 18,
+              color: AppColors.secondary,
             ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              title,
-              style: AppTypography.title.copyWith(fontSize: 18),
-              textAlign: TextAlign.center,
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                spot.name,
+                style: AppTypography.body.copyWith(color: AppColors.heading),
+              ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              message,
-              style: AppTypography.body.copyWith(color: AppColors.secondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton(onPressed: action, child: Text(label)),
+            if (people > 0)
+              StatusPill('$people명', tone: PillTone.active)
+            else
+              const StatusPill('비어 있음', tone: PillTone.muted),
           ],
         ),
       ),

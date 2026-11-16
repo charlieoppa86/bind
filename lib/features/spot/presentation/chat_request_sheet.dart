@@ -91,7 +91,7 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
       return const SafeArea(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.lg),
-          child: Text('이 카드는 더 이상 볼 수 없어요. 체류 시간이 끝났거나 체크아웃했어요.'),
+          child: Text('이 카드는 더 이상 볼 수 없어요. 상대가 체크아웃했어요.'),
         ),
       );
     }
@@ -131,10 +131,7 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
                           ],
                         ],
                       ),
-                      Text(
-                        '${target.category.label} · ${TimeFormat.remaining(target.remaining(now))}',
-                        style: AppTypography.caption,
-                      ),
+                      Text(target.category.label, style: AppTypography.caption),
                     ],
                   ),
                 ),

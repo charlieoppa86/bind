@@ -3,7 +3,6 @@ import 'package:material_ui/material_ui.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
-import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/constants/topic_content.dart';
 
@@ -60,22 +59,20 @@ class _UsageGuideViewState extends State<UsageGuideView> {
             child: PageView(
               controller: _controller,
               onPageChanged: (i) => setState(() => _page = i),
-              children: [
+              children: const [
                 _GuidePage(
                   step: 1,
-                  title:
-                      '주변 ${AppLimits.roomRadiusMeters.round()}m의 방에\nPIN으로 입장해요',
-                  body:
-                      '방을 연 사람에게 PIN ${AppLimits.spotCodeLength}자리를 받아 입장해요.\n주변에 방이 없으면 내가 열고 PIN을 알려주면 돼요.',
-                  visual: const _SpotVisual(),
+                  title: '지금 있는 장소를\n적고 체크인해요',
+                  body: '장소 이름을 자유롭게 적으면 돼요.\n같은 장소를 적은 사람끼리 서로의 주제를 볼 수 있어요.',
+                  visual: _SpotVisual(),
                 ),
-                const _GuidePage(
+                _GuidePage(
                   step: 2,
                   title: '얘기하고 싶은 주제\n한 줄을 올려요',
                   body: '사진 대신 주제로 상대를 찾아요.\n신청은 한 마디와 함께 오고, 내가 수락해야 대화가 열려요.',
                   visual: _CardVisual(),
                 ),
-                const _GuidePage(
+                _GuidePage(
                   step: 3,
                   title: '이런 주제가\n신청을 많이 받아요',
                   body: '구체적일수록 말 걸기 쉬워져요.',
@@ -173,6 +170,34 @@ class _SpotVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget place(String name, String meta, bool open) => Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: open ? AppColors.primarySoft : AppColors.canvas,
+              borderRadius: BorderRadius.circular(AppRadius.control),
+            ),
+            child: Icon(
+              Icons.place_outlined,
+              size: 20,
+              color: open ? AppColors.primary : AppColors.secondary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(name, style: AppTypography.supportingTitle)),
+          Text(
+            meta,
+            style: AppTypography.caption.copyWith(
+              color: open ? AppColors.primary : AppColors.secondary,
+            ),
+          ),
+        ],
+      ),
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -180,30 +205,30 @@ class _SpotVisual extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.qr_code_2_rounded,
-            size: 72,
-            color: AppColors.heading,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (final d in '2580'.split(''))
-                Container(
-                  width: 40,
-                  height: 48,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.canvas,
-                    borderRadius: BorderRadius.circular(AppRadius.control),
-                    border: Border.all(color: AppColors.hairline),
-                  ),
-                  child: Text(d, style: AppTypography.heading),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md - 2,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.canvas,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+            ),
+            child: const Row(
+              children: [
+                Icon(
+                  Icons.place_outlined,
+                  size: 20,
+                  color: AppColors.secondary,
                 ),
-            ],
+                SizedBox(width: AppSpacing.sm),
+                Text('성수 워크라운지', style: AppTypography.bodyLarge),
+              ],
+            ),
           ),
+          const SizedBox(height: AppSpacing.xs),
+          place('성수 워크라운지', '지금 9명', true),
+          place('성수 워크숍 카페', '비어 있음', false),
         ],
       ),
     );

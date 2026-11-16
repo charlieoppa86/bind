@@ -1,10 +1,7 @@
 import 'package:bind_app/app/app.dart';
-import 'package:bind_app/core/location/location.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
-
-import 'support/fake_location.dart';
 
 void main() {
   testWidgets('로그인 → 온보딩 → 체크인 → 피드 → 신청 → 수락 → 채팅', (tester) async {
@@ -12,20 +9,13 @@ void main() {
       ..physicalSize = const Size(1080, 2340)
       ..devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          locationServiceProvider.overrideWithValue(FakeLocationService()),
-        ],
-        child: const BindApp(),
-      ),
-    );
+    await tester.pumpWidget(const ProviderScope(child: BindApp()));
     expect(find.text('BIND'), findsOneWidget);
 
     // 스플래시 → 로그인
     await tester.pump(const Duration(milliseconds: 700));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Google로 시작하기'));
+    await tester.tap(find.text('Google로 로그인'));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 
@@ -51,32 +41,19 @@ void main() {
     // 사용법 가이드 → 스팟 선택
     await tester.tap(find.text('건너뛰기'));
     await tester.pumpAndSettle();
-    // 주변 200m 방: 안에 있는 방만 입장 가능, 밖은 잠김
-    expect(find.text('지후님 주변\n200m 안의 대화방'), findsOneWidget);
-    expect(find.text('성수 북카페 2층'), findsOneWidget);
-    expect(find.text('200m 밖이라 입장할 수 없어요'), findsOneWidget);
-    expect(find.text('판교 프로덕트 컨퍼런스 2026'), findsNothing);
+    // 체크인: 장소를 자유롭게 입력 → 이미 있는 장소 추천 → 주제 → 체크인
+    expect(find.text('지후님,\n지금 어디에 계세요?'), findsOneWidget);
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.first, '워크라');
+    await tester.pump();
+    expect(find.text('혹시 이 장소인가요?'), findsOneWidget);
+    await tester.tap(find.text('성수 워크라운지').last);
+    await tester.pump();
+    expect(find.textContaining('같은 곳으로 들어가요'), findsOneWidget);
 
-    // PIN 인증: 틀린 PIN → 안내, 맞는 PIN → 주제 설정
-    await tester.tap(find.text('성수 워크라운지'));
-    await tester.pumpAndSettle();
-    Future<void> typePin(String pin) async {
-      for (final d in pin.split('')) {
-        await tester.tap(find.text(d).last);
-        await tester.pump();
-      }
-      await tester.pumpAndSettle();
-    }
-
-    await typePin('0000');
-    expect(find.textContaining('PIN이 맞지 않아요'), findsOneWidget);
-    await typePin('2580');
-    expect(find.text('지금 어떤 얘기를\n하고 싶으세요?'), findsOneWidget);
-
-    // 주제 설정 → 체크인
     await tester.tap(find.text('개발').first);
     await tester.pump();
-    await tester.enterText(find.byType(TextField), 'Flutter 상태관리 같이 고민해요');
+    await tester.enterText(fields.last, 'Flutter 상태관리 같이 고민해요');
     await tester.pump();
     await tester.tap(find.text('체크인하기'));
     await tester.pumpAndSettle();

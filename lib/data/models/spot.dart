@@ -1,46 +1,38 @@
-/// `spots/{spotId}` — 특정 장소에 사용자가 연 대화방.
+import '../../core/utils/korean_search.dart';
+
+/// `spots/{spotId}` — 사용자가 자유롭게 입력해 연 장소.
 ///
-/// 장소 반경 [AppLimits.roomRadiusMeters] 안에 있는 사람만 찾고 입장할 수 있다.
-/// 처음 연 사람([creatorUid])이 입장 PIN을 만든다. PIN은 클라이언트가 읽을 수 없도록
-/// 비공개 문서 `spotSecrets/{spotId}`에 두고 Cloud Functions에서 검증하며,
-/// 개설자 본인에게만 내려준다.
+/// 같은 장소를 입력한 사람끼리 서로의 주제 카드를 보고 대화를 신청한다.
+/// 장소 이름은 띄어쓰기·대소문자를 무시하고 같으면 같은 장소로 본다([key]).
+/// 체류 시간 제한은 없다. 체크아웃할 때까지 카드가 보인다.
 class Spot {
   const Spot({
     required this.id,
     required this.name,
-    required this.address,
-    required this.latitude,
-    required this.longitude,
     this.creatorUid,
     this.createdAt,
-    this.isEvent = false,
     this.active = true,
   });
 
   factory Spot.fromMap(String id, Map<String, dynamic> map) => Spot(
     id: id,
     name: map['name'] as String? ?? '',
-    address: map['address'] as String? ?? '',
-    latitude: (map['lat'] as num?)?.toDouble() ?? 0,
-    longitude: (map['lng'] as num?)?.toDouble() ?? 0,
     creatorUid: map['creatorUid'] as String?,
-    isEvent: map['isEvent'] as bool? ?? false,
     active: map['active'] as bool? ?? true,
   );
 
   final String id;
+
+  /// 사용자가 입력한 장소 이름(처음 연 사람의 표기)
   final String name;
-  final String address;
 
-  /// 방의 기준 위치(장소 좌표). 반경 판정에만 쓴다.
-  final double latitude;
-  final double longitude;
-
-  /// 방을 처음 연 사람. PIN을 볼 수 있다.
+  /// 장소를 처음 입력해 연 사람
   final String? creatorUid;
   final DateTime? createdAt;
-
-  /// 행사장에서 연 방
-  final bool isEvent;
   final bool active;
+
+  /// 같은 장소 판정용 키(띄어쓰기·대소문자 무시). Firestore에서는 이 값으로 찾는다.
+  String get key => keyOf(name);
+
+  static String keyOf(String name) => KoreanSearch.normalize(name);
 }
