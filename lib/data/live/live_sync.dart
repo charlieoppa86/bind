@@ -7,6 +7,9 @@ import '../../app/router/routes.dart';
 import '../../core/constants/enums.dart';
 import '../../core/notice/in_app_notice.dart';
 import '../demo/demo_store.dart';
+import '../models/app_user.dart';
+import '../models/safety.dart';
+import '../models/spot.dart';
 import '../models/chat.dart';
 import '../models/chat_request.dart';
 import '../models/checkin.dart';
@@ -47,13 +50,38 @@ class LiveSync {
   CheckinRepository get _repo => _ref.read(checkinRepositoryProvider);
   DemoStore get _store => _ref.read(demoStoreProvider.notifier);
 
-  /// 로그인 직후 부른다. 내 카드 첫 응답을 받을 때까지 기다린다
-  /// (앱을 다시 켰을 때 체크인 중이면 바로 피드로 가도록).
-  Future<void> start(String uid) async {
+  /// 앱 시작 때 기다리는 첫 응답들. 모두 오면 스플래시가 홈으로 넘어간다.
+  static const _initialData = [
+    'mine', // 내 카드(체크인 여부)
+    'spotCards', // 내 장소의 다른 사람 카드
+    'spotInfo', // 내 장소 이름·인원
+    'received', // 받은 요청
+    'sent', // 보낸 요청
+    'chats', // 채팅방·안 읽은 수
+    'blocks', // 차단 목록
+    'me', // 내 프로필(정지·좋았어요 수)
+  ];
+  final _gates = <String, Completer<void>>{};
+
+  /// [key] 데이터의 첫 응답이 왔다(실패해도 기다림은 끝낸다).
+  void _ready(String key) {
+    final gate = _gates[key];
+    if (gate != null && !gate.isCompleted) gate.complete();
+  }
+
+  /// 로그인 직후 부른다. 홈 화면에 필요한 데이터([_initialData])의 첫 응답을
+  /// 모두 받을 때까지 기다린다. 그동안 스플래시가 보이고, 끝나면 홈으로 간다.
+  /// 네트워크가 느려도 [timeout]이 지나면 들어간다(나머지는 도착하는 대로 채워진다).
+  Future<void> start(
+    String uid, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     if (_uid == uid && _mine != null) return;
     stop();
     _uid = uid;
-    final first = Completer<void>();
+    _gates
+      ..clear()
+      ..addAll({for (final k in _initialData) k: Completer<void>()});
     _mine = _repo
         .watchMyActive(uid)
         .listen(
@@ -62,16 +90,28 @@ class LiveSync {
               ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
             _store.applyMyCheckins(mine);
             _watchSpot(mine.firstOrNull?.spotId);
-            if (!first.isCompleted) first.complete();
+            _ready('mine');
           },
           onError: (Object e) {
             debugPrint('[BIND] 내 체크인 구독 실패: $e');
-            if (!first.isCompleted) first.complete();
+            _ready('mine');
+            _ready('spotCards');
+            _ready('spotInfo');
           },
         );
     _watchRequestsAndChats(uid);
     _watchSafety(uid);
-    await first.future.timeout(const Duration(seconds: 8), onTimeout: () {});
+    await Future.wait([for (final g in _gates.values) g.future]).timeout(
+      timeout,
+      onTimeout: () {
+        final late = [
+          for (final e in _gates.entries)
+            if (!e.value.isCompleted) e.key,
+        ];
+        debugPrint('[BIND] 시작 데이터 일부가 늦어 먼저 들어가요: $late');
+        return const [];
+      },
+    );
   }
 
   /// 서버 uid → 앱 안 uid(내 uid는 [DemoDb.myUid])
@@ -104,38 +144,70 @@ class LiveSync {
     leftUids: [for (final u in c.leftUids) _local(u)],
   );
 
+  /// 첫 응답이 오면(실패해도) [key] 기다림을 끝내는 구독 헬퍼
+  StreamSubscription<T> _listen<T>(
+    Stream<T> stream,
+    String key,
+    String label,
+    void Function(T value) onData,
+  ) => stream.listen(
+    (value) {
+      onData(value);
+      _ready(key);
+    },
+    onError: (Object e) {
+      debugPrint('[BIND] $label 구독 실패: $e');
+      _ready(key);
+    },
+  );
+
   void _watchRequestsAndChats(String uid) {
     final requests = _ref.read(requestRepositoryProvider);
-    _received = requests.watchReceived(uid).listen((list) {
-      final local = [for (final r in list) _localRequest(r)];
-      _store.applyReceivedRequests(local);
-      _noticeNewRequests(local);
-      _fetchUsers([for (final r in local) r.fromUid]);
-    }, onError: (Object e) => debugPrint('[BIND] 받은 요청 구독 실패: $e'));
-    _sent = requests.watchSent(uid).listen((list) {
-      final local = [for (final r in list) _localRequest(r)];
-      _fetchUsers([for (final r in local) r.toUid]);
-      _store.applySentRequests(local);
-      _noticeAnswers(local);
-    }, onError: (Object e) => debugPrint('[BIND] 보낸 요청 구독 실패: $e'));
-    _chats = requests.watchChats(uid).listen((list) {
-      final local = [for (final (c, n) in list) (_localChat(c), n)];
-      _fetchUsers([for (final (c, _) in local) c.otherUid(DemoDb.myUid)]);
-      _store.applyChats(local);
-    }, onError: (Object e) => debugPrint('[BIND] 채팅방 구독 실패: $e'));
+    _received = _listen<List<ChatRequest>>(
+      requests.watchReceived(uid),
+      'received',
+      '받은 요청',
+      (list) {
+        final local = [for (final r in list) _localRequest(r)];
+        _store.applyReceivedRequests(local);
+        _noticeNewRequests(local);
+        _fetchUsers([for (final r in local) r.fromUid]);
+      },
+    );
+    _sent = _listen<List<ChatRequest>>(
+      requests.watchSent(uid),
+      'sent',
+      '보낸 요청',
+      (list) {
+        final local = [for (final r in list) _localRequest(r)];
+        _fetchUsers([for (final r in local) r.toUid]);
+        _store.applySentRequests(local);
+        _noticeAnswers(local);
+      },
+    );
+    _chats = _listen<List<(Chat, int)>>(
+      requests.watchChats(uid),
+      'chats',
+      '채팅방',
+      (list) {
+        final local = [for (final (c, n) in list) (_localChat(c), n)];
+        _fetchUsers([for (final (c, _) in local) c.otherUid(DemoDb.myUid)]);
+        _store.applyChats(local);
+      },
+    );
   }
 
   void _watchSafety(String uid) {
     final safety = _ref.read(safetyRepositoryProvider);
-    _blocks = safety
-        .watchBlocks(uid)
-        .listen(
-          _store.applyBlocks,
-          onError: (Object e) => debugPrint('[BIND] 차단 목록 구독 실패: $e'),
-        );
-    _me = safety.watchMe(uid).listen((me) {
+    _blocks = _listen<List<Block>>(
+      safety.watchBlocks(uid),
+      'blocks',
+      '차단 목록',
+      _store.applyBlocks,
+    );
+    _me = _listen<AppUser?>(safety.watchMe(uid), 'me', '내 프로필', (me) {
       if (me != null && me.isOnboarded) _store.applyMe(me);
-    }, onError: (Object e) => debugPrint('[BIND] 내 프로필 구독 실패: $e'));
+    });
   }
 
   /// 처음 받은 목록은 기억만 하고, 그 뒤에 새로 온 요청만 알린다.
@@ -207,20 +279,24 @@ class LiveSync {
     _spotId = spotId;
     if (spotId == null) {
       _store.applySpotCheckins(null, const []);
+      _ready('spotCards');
+      _ready('spotInfo');
       return;
     }
-    _spotCards = _repo
-        .watchSpotActive(spotId)
-        .listen(
-          (cards) => _store.applySpotCheckins(spotId, [
-            for (final c in cards)
-              if (c.uid != _uid) c,
-          ]),
-          onError: (Object e) => debugPrint('[BIND] 피드 구독 실패: $e'),
-        );
-    _spot = _repo.watchSpot(spotId).listen((spot) {
+    _spotCards = _listen<List<Checkin>>(
+      _repo.watchSpotActive(spotId),
+      'spotCards',
+      '피드',
+      (cards) {
+        _store.applySpotCheckins(spotId, [
+          for (final c in cards)
+            if (c.uid != _uid) c,
+        ]);
+      },
+    );
+    _spot = _listen<Spot?>(_repo.watchSpot(spotId), 'spotInfo', '장소', (spot) {
       if (spot != null) _store.applySpots([spot]);
-    }, onError: (Object e) => debugPrint('[BIND] 장소 구독 실패: $e'));
+    });
   }
 
   /// 로그아웃·탈퇴 때 구독을 모두 끊는다.
@@ -237,6 +313,10 @@ class LiveSync {
     _spot = _received = _sent = _chats = _blocks = _me = null;
     _uid = _spotId = null;
     _knownReceived = null;
+    for (final g in _gates.values) {
+      if (!g.isCompleted) g.complete();
+    }
+    _gates.clear();
     _sentStatus = null;
     _fetchedUsers.clear();
   }

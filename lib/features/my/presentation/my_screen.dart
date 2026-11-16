@@ -12,7 +12,7 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
 import 'plus_prompt.dart';
 
-/// 마이 > 마이
+/// 마이페이지
 ///
 /// 화면은 아무것도 구독하지 않고, 카드마다 자기 데이터만 구독한다.
 class MyScreen extends StatelessWidget {
@@ -26,7 +26,7 @@ class MyScreen extends StatelessWidget {
         backgroundColor: AppColors.groupedBackground,
         centerTitle: false,
         titleSpacing: AppSpacing.page,
-        title: const Text('마이', style: AppTypography.title),
+        title: const Text('마이페이지', style: AppTypography.title),
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: AppSpacing.xl),

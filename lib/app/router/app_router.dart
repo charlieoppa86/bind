@@ -137,7 +137,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => ScaffoldWithNavBar(navigationShell: shell),
         branches: [
-          // 탭 1: 스팟
+          // 탭 1: 체크인
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -163,7 +163,36 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // 탭 2: 요청함
+          // 탭 2: 채팅
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.chats,
+                builder: (_, _) => const ChatListScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':chatId',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (_, state) =>
+                        ChatRoomScreen(chatId: state.pathParameters['chatId']!),
+                    routes: [
+                      GoRoute(
+                        path: 'review',
+                        parentNavigatorKey: rootNavigatorKey,
+                        pageBuilder: (_, state) => DialogPage<void>(
+                          key: state.pageKey,
+                          child: ChatReviewDialog(
+                            chatId: state.pathParameters['chatId']!,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          // 탭 3: 요청함
           StatefulShellBranch(
             initialLocation: Routes.requestsReceived,
             routes: [
@@ -194,36 +223,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // 탭 3: 채팅
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: Routes.chats,
-                builder: (_, _) => const ChatListScreen(),
-                routes: [
-                  GoRoute(
-                    path: ':chatId',
-                    parentNavigatorKey: rootNavigatorKey,
-                    builder: (_, state) =>
-                        ChatRoomScreen(chatId: state.pathParameters['chatId']!),
-                    routes: [
-                      GoRoute(
-                        path: 'review',
-                        parentNavigatorKey: rootNavigatorKey,
-                        pageBuilder: (_, state) => DialogPage<void>(
-                          key: state.pageKey,
-                          child: ChatReviewDialog(
-                            chatId: state.pathParameters['chatId']!,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-          // 탭 4: 마이
+          // 탭 4: 마이페이지
           StatefulShellBranch(
             routes: [
               GoRoute(

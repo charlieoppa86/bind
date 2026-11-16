@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ 시스템 시작 화면: 앱 배경색만, 아이콘 없음.
+         (기본값은 앱 아이콘이 떠서 앱 스플래시와 화면 두 개가 겹쳐 보였다) -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/bind_background</item>
+        <item name="android:windowSplashScreenBackground">@color/bind_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/bind_background</item>
+    </style>
+</resources>

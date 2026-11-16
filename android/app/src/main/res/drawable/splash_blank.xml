@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ 시스템 시작 화면의 아이콘 자리를 비운다.
+     시작 화면은 배경색만 보이고, 바로 이어서 앱 스플래시(로고+문구)가 같은 배경 위에 뜬다. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <size android:width="1dp" android:height="1dp" />
+</shape>
