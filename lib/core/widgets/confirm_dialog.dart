@@ -10,7 +10,7 @@ class ConfirmDialog extends StatelessWidget {
     required this.title,
     required this.confirmLabel,
     required this.onConfirm,
-    required this.onCancel,
+    this.onCancel,
     this.message,
     this.cancelLabel = '취소',
     this.destructive = false,
@@ -23,7 +23,9 @@ class ConfirmDialog extends StatelessWidget {
   final String cancelLabel;
   final bool destructive;
   final VoidCallback onConfirm;
-  final VoidCallback onCancel;
+
+  /// null이면 확인 버튼 하나만 보여 준다(알림용).
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -53,16 +55,18 @@ class ConfirmDialog extends StatelessWidget {
             const SizedBox(height: AppSpacing.page),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: onCancel,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 52),
+                if (onCancel != null) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onCancel,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 52),
+                      ),
+                      child: Text(cancelLabel),
                     ),
-                    child: Text(cancelLabel),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
                 Expanded(
                   child: FilledButton(
                     onPressed: onConfirm,
@@ -105,3 +109,19 @@ Future<bool> showConfirm(
   );
   return ok ?? false;
 }
+
+/// 확인 버튼 하나만 있는 알림 다이얼로그.
+Future<void> showNotice(
+  BuildContext context, {
+  required String title,
+  String? message,
+  String confirmLabel = '확인',
+}) => showDialog<void>(
+  context: context,
+  builder: (c) => ConfirmDialog(
+    title: title,
+    message: message,
+    confirmLabel: confirmLabel,
+    onConfirm: () => Navigator.pop(c),
+  ),
+);

@@ -10,6 +10,7 @@ import '../../../core/constants/app_limits.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
+import 'plus_prompt.dart';
 
 /// 마이 > 마이
 ///
@@ -179,7 +180,7 @@ class _PlusCard extends ConsumerWidget {
     final autoRenew = ref.watch(plusAutoRenewProvider);
     final until = ref.watch(meProvider.select((m) => m?.plusExpiresAt));
     return SectionCard(
-      onTap: () => context.push(Routes.myPlus),
+      onTap: () => showPlusComingSoon(context),
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Row(
         children: [
