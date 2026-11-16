@@ -8,6 +8,7 @@ import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/bind_logo.dart';
+import '../../../core/widgets/emoji_avatar.dart';
 import '../../../core/widgets/google_sign_in_button.dart';
 import '../../../data/demo/demo_store.dart';
 
@@ -131,77 +132,22 @@ class _CardPreview extends StatelessWidget {
                 top: top + i * step,
                 child: Transform.rotate(
                   angle: angle,
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: AppColors.elevated,
-                      borderRadius: BorderRadius.circular(AppRadius.section),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.shadow.withValues(alpha: 0.35),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        _EmojiAvatar(emoji, index: i),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '$name · $job',
-                                style: AppTypography.caption,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                topic,
-                                style: AppTypography.supportingTitle,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (i == 0) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          const StatusPill('대화 중', tone: PillTone.active),
-                        ],
-                      ],
-                    ),
+                  child: IntroTopicCard(
+                    emoji: emoji,
+                    index: i,
+                    name: name,
+                    job: job,
+                    topic: topic,
+                    shadow: true,
+                    trailing: i == 0
+                        ? const StatusPill('대화 중', tone: PillTone.active)
+                        : null,
                   ),
                 ),
               ),
           ],
         );
       },
-    );
-  }
-}
-
-/// 소개용 일러스트 아바타(실제 사용자 사진이 아니다. 앱에서 프로필 사진은 받지 않는다)
-class _EmojiAvatar extends StatelessWidget {
-  const _EmojiAvatar(this.emoji, {required this.index});
-
-  final String emoji;
-  final int index;
-
-  static const _size = 40.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final (bg, _) = AppColors.avatarTints[index % AppColors.avatarTints.length];
-    return Container(
-      width: _size,
-      height: _size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-      child: Text(
-        emoji,
-        style: const TextStyle(fontSize: _size * 0.55, height: 1),
-      ),
     );
   }
 }

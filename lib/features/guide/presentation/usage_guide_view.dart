@@ -4,7 +4,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/enums.dart';
-import '../../../core/constants/topic_content.dart';
+import '../../../core/widgets/emoji_avatar.dart';
 
 /// 사용법 가이드 3장 스와이프 (US-013).
 /// 온보딩(`/onboarding/guide`)과 마이(`/my/guide`)에서 같은 위젯을 재사용한다.
@@ -75,7 +75,7 @@ class _UsageGuideViewState extends State<UsageGuideView> {
                 _GuidePage(
                   step: 3,
                   title: '이런 주제가\n신청을 많이 받아요',
-                  body: '구체적일수록 말 걸기 쉬워져요.',
+                  body: '짧고 편하게 적어도 괜찮아요.\n지금 바로 이야기할 수 있는 주제면 충분해요.',
                   visual: _ExamplesVisual(),
                 ),
               ],
@@ -240,42 +240,34 @@ class _CardVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: _panel(),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.canvas,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: AppColors.hairline),
-        ),
+    return IntroTopicCard(
+      emoji: '👩‍💼',
+      index: 3,
+      name: '서연',
+      job: JobTag.marketer.label,
+      topic: '점심 먹고 가볍게 수다 떨어요',
+      footer: Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.md),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '도윤 · ${JobTag.developer.label}',
-              style: AppTypography.caption,
+              '받은 신청',
+              style: AppTypography.caption.copyWith(color: AppColors.tertiary),
             ),
             const SizedBox(height: AppSpacing.xs),
-            const Text(
-              'Riverpod 3 마이그레이션 해보신 분?',
-              style: AppTypography.subtitle,
-            ),
-            const SizedBox(height: AppSpacing.md),
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
+                vertical: AppSpacing.sm + 2,
               ),
               decoration: BoxDecoration(
                 color: AppColors.fill,
-                borderRadius: BorderRadius.circular(AppRadius.control),
+                borderRadius: BorderRadius.circular(AppRadius.card),
               ),
               child: const Text(
-                '“저도 지금 하는 중이에요! 얘기해요”',
+                '“저도 쉬는 중이에요! 10분만 얘기해요”',
                 style: AppTypography.body,
               ),
             ),
@@ -286,39 +278,29 @@ class _CardVisual extends StatelessWidget {
   }
 }
 
+/// 첫 화면 카드와 같은 결의 가볍고 일상적인 주제 예시
 class _ExamplesVisual extends StatelessWidget {
   const _ExamplesVisual();
 
   @override
   Widget build(BuildContext context) {
     final examples = [
-      topicExamples[TopicCategory.dev]!.first,
-      topicExamples[TopicCategory.marketing]!.first,
-      topicExamples[TopicCategory.career]![2],
+      ('🧑‍🍳', '준호', JobTag.chef.label, '요즘 맛집 정보 나눠요'),
+      ('🧑‍🎓', '지우', JobTag.jobSeeking.label, '취업 준비 얘기 나눠요'),
+      ('🧑‍🎨', '민서', JobTag.creator.label, '주말에 뭐 하세요?'),
     ];
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (final e in examples)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.canvas,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: AppColors.hairline),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.chat_bubble_outline,
-                  size: 18,
-                  color: AppColors.secondary,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: Text(e, style: AppTypography.subtitle)),
-              ],
+        for (final (i, (emoji, name, job, topic)) in examples.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: IntroTopicCard(
+              emoji: emoji,
+              index: i + 1,
+              name: name,
+              job: job,
+              topic: topic,
             ),
           ),
       ],
