@@ -19,12 +19,13 @@ class ProfileEditScreen extends ConsumerWidget {
         child: ProfileForm(
           initialNickname: me?.nickname ?? '',
           initialJobTag: me?.jobTag,
+          initialJobCustom: me?.jobCustom,
           submitLabel: '저장',
-          onSubmit: (nickname, jobTag) {
+          onSubmit: (nickname, jobTag, jobCustom) {
             // TODO(firebase): users/{uid} 갱신
             ref
                 .read(demoStoreProvider.notifier)
-                .updateProfile(nickname, jobTag);
+                .updateProfile(nickname, jobTag, jobCustom: jobCustom);
             context.pop();
             ScaffoldMessenger.of(context)
                 .showSnackBar(const SnackBar(content: Text('프로필을 저장했어요')));

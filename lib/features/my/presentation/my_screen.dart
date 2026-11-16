@@ -64,7 +64,7 @@ class MyScreen extends ConsumerWidget {
                             ],
                           ),
                           Text(
-                            '${me.jobTag.label} · 프로필 수정',
+                            '${me.jobLabel} · 프로필 수정',
                             style: AppTypography.body.copyWith(
                               color: AppColors.secondary,
                             ),

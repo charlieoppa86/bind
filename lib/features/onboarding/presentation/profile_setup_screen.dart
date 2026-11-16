@@ -28,16 +28,17 @@ class ProfileSetupScreen extends ConsumerWidget {
           header: const OnboardingStep(
             step: 1,
             total: 2,
-            title: '어떻게 불러드릴까요?',
+            title: '닉네임을 설정하세요',
             description: '실명이나 사진 없이, 닉네임과 하는 일만 상대에게 보여요.',
           ),
           initialNickname: db.draftNickname ?? '',
           initialJobTag: db.draftJobTag,
+          initialJobCustom: db.draftJobCustom,
           submitLabel: '다음',
-          onSubmit: (nickname, jobTag) {
+          onSubmit: (nickname, jobTag, jobCustom) {
             ref
                 .read(demoStoreProvider.notifier)
-                .saveDraftProfile(nickname, jobTag);
+                .saveDraftProfile(nickname, jobTag, jobCustom: jobCustom);
             context.push(Routes.onboardingConsent);
           },
         ),

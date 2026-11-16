@@ -190,7 +190,7 @@ class TopicCard extends StatelessWidget {
                           ],
                         ],
                       ),
-                      Text(c.jobTag.label, style: AppTypography.caption),
+                      Text(c.jobLabel, style: AppTypography.caption),
                     ],
                   ),
                 ),

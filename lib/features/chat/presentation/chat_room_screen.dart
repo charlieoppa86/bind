@@ -92,7 +92,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 style: AppTypography.supportingTitle,
               ),
               if (!left && other != null)
-                Text(other.jobTag.label, style: AppTypography.caption),
+                Text(other.jobLabel, style: AppTypography.caption),
             ],
           ),
           actions: [

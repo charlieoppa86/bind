@@ -5,6 +5,9 @@ abstract final class AppLimits {
   static const nicknameMin = 2;
   static const nicknameMax = 10;
 
+  /// 하는 일을 기타로 고르고 직접 입력할 때 글자 수
+  static const jobCustomMax = 10;
+
   // US-005 주제 한 줄
   static const topicMaxLength = 30;
 
@@ -26,7 +29,7 @@ abstract final class AppLimits {
   static const recentPlacesCount = 3;
 
   /// US-010 서로 다른 신고자 수 누적 시 이용 정지
-  static const reportsUntilSuspension = 3;
+  static const reportsUntilSuspension = 2;
 
   /// US-016 최근 주제 보관 개수
   static const recentTopicsCount = 3;

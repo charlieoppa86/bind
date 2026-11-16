@@ -45,7 +45,7 @@ abstract final class DemoSeed {
     AppUser(
       uid: 'u-jaehyun',
       nickname: '재현',
-      jobTag: JobTag.founder,
+      jobTag: JobTag.preparingStartup,
       consentedAt: null,
       goodReviewCount: 1,
     ),
@@ -58,21 +58,21 @@ abstract final class DemoSeed {
     AppUser(
       uid: 'u-taeo',
       nickname: '태오',
-      jobTag: JobTag.other,
+      jobTag: JobTag.freelancer,
       consentedAt: null,
       goodReviewCount: 2,
     ),
     AppUser(
       uid: 'u-yuna',
       nickname: '유나PM',
-      jobTag: JobTag.other,
+      jobTag: JobTag.productManager,
       consentedAt: null,
       goodReviewCount: 9,
     ),
     AppUser(
       uid: 'u-gunwoo',
       nickname: '건우',
-      jobTag: JobTag.student,
+      jobTag: JobTag.jobSeeking,
       consentedAt: null,
     ),
     AppUser(
@@ -112,13 +112,13 @@ abstract final class DemoSeed {
     AppUser(
       uid: 'u-kang',
       nickname: '강코치',
-      jobTag: JobTag.other,
+      jobTag: JobTag.educator,
       consentedAt: null,
     ),
     AppUser(
       uid: 'u-hana',
       nickname: '하나',
-      jobTag: JobTag.designer,
+      jobTag: JobTag.writer,
       consentedAt: null,
       goodReviewCount: 2,
     ),

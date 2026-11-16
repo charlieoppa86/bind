@@ -12,6 +12,7 @@ class Checkin {
     required this.spotId,
     required this.nickname,
     required this.jobTag,
+    this.jobCustom,
     required this.topic,
     required this.category,
     required this.startedAt,
@@ -26,6 +27,7 @@ class Checkin {
     spotId: map['spotId'] as String,
     nickname: map['nickname'] as String? ?? '',
     jobTag: enumByName(JobTag.values, map['jobTag'], JobTag.other),
+    jobCustom: map['jobCustom'] as String?,
     topic: map['topic'] as String? ?? '',
     category: enumByName(
       TopicCategory.values,
@@ -43,6 +45,10 @@ class Checkin {
   final String spotId;
   final String nickname;
   final JobTag jobTag;
+  final String? jobCustom;
+
+  /// 화면에 보이는 하는 일. 기타를 고르고 직접 입력했으면 그 글자.
+  String get jobLabel => jobLabelOf(jobTag, jobCustom);
   final String topic;
   final TopicCategory category;
   final DateTime startedAt;
@@ -66,6 +72,7 @@ class Checkin {
     spotId: spotId,
     nickname: nickname,
     jobTag: jobTag,
+    jobCustom: jobCustom,
     topic: topic ?? this.topic,
     category: category ?? this.category,
     startedAt: startedAt,
@@ -80,6 +87,7 @@ class Checkin {
     'spotId': spotId,
     'nickname': nickname,
     'jobTag': jobTag.name,
+    'jobCustom': jobCustom,
     'topic': topic,
     'category': category.name,
     'startedAt': toTimestamp(startedAt),

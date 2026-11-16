@@ -18,6 +18,7 @@ class ChatRequest {
     required this.expiresAt,
     this.fromNickname = '',
     this.fromJobTag = JobTag.other,
+    this.fromJobCustom,
     this.chatId,
   });
 
@@ -38,6 +39,7 @@ class ChatRequest {
         expiresAt: toDateTime(map['expiresAt']) ?? DateTime.now(),
         fromNickname: map['fromNickname'] as String? ?? '',
         fromJobTag: enumByName(JobTag.values, map['fromJobTag'], JobTag.other),
+        fromJobCustom: map['fromJobCustom'] as String?,
         chatId: map['chatId'] as String?,
       );
 
@@ -56,6 +58,10 @@ class ChatRequest {
   final DateTime expiresAt;
   final String fromNickname;
   final JobTag fromJobTag;
+  final String? fromJobCustom;
+
+  /// 화면에 보이는 신청자의 하는 일. 기타를 고르고 직접 입력했으면 그 글자.
+  String get fromJobLabel => jobLabelOf(fromJobTag, fromJobCustom);
   final String? chatId;
 
   ChatRequest copyWith({ChatRequestStatus? status, String? chatId}) =>
@@ -71,6 +77,7 @@ class ChatRequest {
         expiresAt: expiresAt,
         fromNickname: fromNickname,
         fromJobTag: fromJobTag,
+        fromJobCustom: fromJobCustom,
         chatId: chatId ?? this.chatId,
       );
 }

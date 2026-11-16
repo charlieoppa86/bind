@@ -68,7 +68,7 @@ class RequestDetailScreen extends ConsumerWidget {
                           Row(
                             children: [
                               Text(
-                                r.fromJobTag.label,
+                                r.fromJobLabel,
                                 style: AppTypography.caption,
                               ),
                               if (from?.hasTrustBadge ?? false) ...[

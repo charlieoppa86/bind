@@ -43,6 +43,7 @@ class DemoDb {
   /// 온보딩 1단계(프로필)에서 입력한 값. 동의까지 마쳐야 [me]가 된다.
   String? draftNickname;
   JobTag? draftJobTag;
+  String? draftJobCustom;
 
   bool plusAutoRenew = false;
 
@@ -251,7 +252,8 @@ class DemoStore extends Notifier<DemoDb> {
     if (_db.me == null) {
       _db
         ..draftNickname = null
-        ..draftJobTag = null;
+        ..draftJobTag = null
+        ..draftJobCustom = null;
       _commit();
     }
     _session.signOut();
@@ -262,10 +264,11 @@ class DemoStore extends Notifier<DemoDb> {
     return _db.users.values.any((u) => !u.deleted && u.nickname == n);
   }
 
-  void saveDraftProfile(String nickname, JobTag jobTag) {
+  void saveDraftProfile(String nickname, JobTag jobTag, {String? jobCustom}) {
     _db
       ..draftNickname = nickname.trim()
-      ..draftJobTag = jobTag;
+      ..draftJobTag = jobTag
+      ..draftJobCustom = jobTag == JobTag.other ? jobCustom?.trim() : null;
     _commit();
   }
 
@@ -274,6 +277,7 @@ class DemoStore extends Notifier<DemoDb> {
       uid: DemoDb.myUid,
       nickname: _db.draftNickname ?? '',
       jobTag: _db.draftJobTag ?? JobTag.other,
+      jobCustom: _db.draftJobCustom,
       consentedAt: _now,
     );
     _commit();
@@ -285,8 +289,12 @@ class DemoStore extends Notifier<DemoDb> {
     _commit();
   }
 
-  void updateProfile(String nickname, JobTag jobTag) {
-    _db.me = _db.me?.copyWith(nickname: nickname.trim(), jobTag: jobTag);
+  void updateProfile(String nickname, JobTag jobTag, {String? jobCustom}) {
+    _db.me = _db.me?.copyWith(
+      nickname: nickname.trim(),
+      jobTag: jobTag,
+      jobCustom: () => jobTag == JobTag.other ? jobCustom?.trim() : null,
+    );
     for (final (i, c) in _db.checkins.indexed.toList()) {
       if (c.uid == DemoDb.myUid) {
         _db.checkins[i] = _withProfile(c, _db.me!);
@@ -301,6 +309,7 @@ class DemoStore extends Notifier<DemoDb> {
     spotId: c.spotId,
     nickname: me.nickname,
     jobTag: me.jobTag,
+    jobCustom: me.jobCustom,
     topic: c.topic,
     category: c.category,
     startedAt: c.startedAt,
@@ -340,6 +349,7 @@ class DemoStore extends Notifier<DemoDb> {
       spotId: spot.id,
       nickname: me.nickname,
       jobTag: me.jobTag,
+      jobCustom: me.jobCustom,
       topic: topic.trim(),
       category: category,
       startedAt: now,
@@ -379,6 +389,7 @@ class DemoStore extends Notifier<DemoDb> {
         spotId: first.spotId,
         nickname: me.nickname,
         jobTag: me.jobTag,
+        jobCustom: me.jobCustom,
         topic: topic.trim(),
         category: category,
         startedAt: _now,
@@ -567,6 +578,7 @@ class DemoStore extends Notifier<DemoDb> {
       expiresAt: now.add(AppLimits.requestExpiry),
       fromNickname: me.nickname,
       fromJobTag: me.jobTag,
+      fromJobCustom: me.jobCustom,
     );
     _db.requests.add(req);
     _commit();

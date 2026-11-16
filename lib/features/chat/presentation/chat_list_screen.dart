@@ -100,7 +100,7 @@ class ChatListScreen extends ConsumerWidget {
                                                 width: AppSpacing.xs,
                                               ),
                                               Text(
-                                                '· ${other.jobTag.label}',
+                                                '· ${other.jobLabel}',
                                                 style: AppTypography.caption,
                                               ),
                                             ],

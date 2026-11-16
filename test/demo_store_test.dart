@@ -114,4 +114,19 @@ void main() {
     store().checkOut();
     expect(db().myCheckins(DateTime.now()), isEmpty);
   });
+
+  test('하는 일을 기타로 고르고 직접 입력하면 그 글자가 카드에 보인다', () {
+    store().updateProfile('지후', JobTag.other, jobCustom: ' 바리스타 ');
+    expect(db().me!.jobLabel, '바리스타');
+    store().checkIn(
+      placeName: '성수 워크라운지',
+      topic: '테스트',
+      category: TopicCategory.other,
+    );
+    expect(db().myCheckins(DateTime.now()).single.jobLabel, '바리스타');
+    // 기타가 아닌 태그로 바꾸면 직접 입력값은 지워진다
+    store().updateProfile('지후', JobTag.chef, jobCustom: '바리스타');
+    expect(db().me!.jobCustom, isNull);
+    expect(db().me!.jobLabel, '셰프·요리');
+  });
 }

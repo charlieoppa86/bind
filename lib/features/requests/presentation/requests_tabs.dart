@@ -150,10 +150,7 @@ class _ReceivedTile extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        '· ${r.fromJobTag.label}',
-                        style: AppTypography.caption,
-                      ),
+                      Text('· ${r.fromJobLabel}', style: AppTypography.caption),
                       const Spacer(),
                       Text(
                         TimeFormat.relative(r.createdAt, now),

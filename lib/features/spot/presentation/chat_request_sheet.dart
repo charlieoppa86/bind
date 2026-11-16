@@ -122,7 +122,7 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
                           Text(target.nickname, style: AppTypography.title),
                           const SizedBox(width: AppSpacing.xs),
                           Text(
-                            '· ${target.jobTag.label}',
+                            '· ${target.jobLabel}',
                             style: AppTypography.caption,
                           ),
                           if (target.hasTrustBadge) ...[

@@ -9,7 +9,7 @@ enum SessionStatus {
   /// 로그인했지만 프로필·동의 미완료
   needsOnboarding,
 
-  /// 서로 다른 3명 신고 누적으로 이용 정지
+  /// 서로 다른 신고자 `AppLimits.reportsUntilSuspension`명 누적으로 이용 정지
   suspended,
   ready,
 }

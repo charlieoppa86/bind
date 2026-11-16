@@ -110,8 +110,7 @@ class _CardPreview extends StatelessWidget {
     // (닉네임, 하는 일, 주제, 아바타, 기울기, 가로 위치)
     final cards = [
       ('도윤', JobTag.developer.label, 'AI 같이 공부해요', '🧑‍💻', -0.03, 0.0),
-      // 소개용 문구라 온보딩 직무 목록(JobTag)에 없는 '프리랜서'도 쓴다.
-      ('하린', '프리랜서', '가벼운 스몰톡이 하고 싶어요', '🙋‍♀️', 0.025, 28.0),
+      ('하린', JobTag.freelancer.label, '가벼운 스몰톡이 하고 싶어요', '🙋‍♀️', 0.025, 28.0),
       ('재현', JobTag.designer.label, '이직 고민이 있어요', '🧑‍💼', -0.015, 6.0),
     ];
     return LayoutBuilder(

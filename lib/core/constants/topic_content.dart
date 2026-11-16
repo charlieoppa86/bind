@@ -64,6 +64,6 @@ const Map<TopicCategory, List<String>> topicExamples = {
 /// 이용 규칙 3줄 (US-003)
 List<String> get communityRules => [
   '주제에 대한 대화만 나눠요.',
-  '영업·홍보나 이성 만남 목적의 접근은 금지예요.',
+  '영업·홍보나 전도 등 종교 권유는 금지예요.',
   '서로 다른 ${AppLimits.reportsUntilSuspension}명에게 신고되면 이용이 정지돼요.',
 ];

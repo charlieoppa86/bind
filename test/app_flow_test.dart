@@ -20,7 +20,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 온보딩 1: 프로필 — 이미 쓰는 닉네임은 바로 안내
-    expect(find.text('어떻게 불러드릴까요?'), findsOneWidget);
+    expect(find.text('닉네임을 설정하세요'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '도윤');
     await tester.pump();
     expect(find.text('이미 쓰고 있는 닉네임이에요'), findsOneWidget);

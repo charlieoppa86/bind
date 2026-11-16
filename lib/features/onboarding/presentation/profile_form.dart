@@ -17,14 +17,19 @@ class ProfileForm extends ConsumerStatefulWidget {
     this.header,
     this.initialNickname = '',
     this.initialJobTag,
+    this.initialJobCustom,
     super.key,
   });
 
   final Widget? header;
   final String initialNickname;
   final JobTag? initialJobTag;
+  final String? initialJobCustom;
   final String submitLabel;
-  final void Function(String nickname, JobTag jobTag) onSubmit;
+
+  /// [jobCustom]은 기타를 골랐을 때만 값이 있다.
+  final void Function(String nickname, JobTag jobTag, String? jobCustom)
+  onSubmit;
 
   @override
   ConsumerState<ProfileForm> createState() => _ProfileFormState();
@@ -33,9 +38,21 @@ class ProfileForm extends ConsumerStatefulWidget {
 class _ProfileFormState extends ConsumerState<ProfileForm> {
   late final _nickname = TextEditingController(text: widget.initialNickname);
   late JobTag? _jobTag = widget.initialJobTag;
+  late final _jobCustom = TextEditingController(text: widget.initialJobCustom);
+  final _jobCustomFocus = FocusNode();
+
+  bool get _isOther => _jobTag == JobTag.other;
+
+  void _selectJob(JobTag tag) {
+    setState(() => _jobTag = tag);
+    // 기타를 고르면 바로 직접 입력칸으로
+    if (tag == JobTag.other) _jobCustomFocus.requestFocus();
+  }
 
   @override
   void dispose() {
+    _jobCustom.dispose();
+    _jobCustomFocus.dispose();
     _nickname.dispose();
     super.dispose();
   }
@@ -56,7 +73,8 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
   bool get _valid =>
       _nickname.text.trim().isNotEmpty &&
       _nicknameError == null &&
-      _jobTag != null;
+      _jobTag != null &&
+      (!_isOther || _jobCustom.text.trim().isNotEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -110,21 +128,61 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
               ),
               const SizedBox(height: AppSpacing.xs),
               const Text(
-                '카드에 닉네임과 함께 보여요. 1개만 고를 수 있어요.',
+                '카드에 닉네임과 함께 보여요. 지금 나를 가장 잘 나타내는 하나를 골라요.',
                 style: AppTypography.caption,
               ),
-              const SizedBox(height: AppSpacing.md),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  for (final tag in JobTag.values)
-                    SelectChip(
-                      label: tag.label,
-                      selected: _jobTag == tag,
-                      onTap: () => setState(() => _jobTag = tag),
+              for (final group in JobTagGroup.values) ...[
+                const SizedBox(height: AppSpacing.md),
+                if (group.label.isNotEmpty) ...[
+                  Text(
+                    group.label,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.tertiary,
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs + 2),
                 ],
+                Wrap(
+                  spacing: AppSpacing.xs + 2,
+                  runSpacing: AppSpacing.xs + 2,
+                  children: [
+                    for (final tag in JobTag.values)
+                      if (tag.group == group)
+                        SelectChip(
+                          label: tag.label,
+                          compact: true,
+                          selected: _jobTag == tag,
+                          onTap: () => _selectJob(tag),
+                        ),
+                  ],
+                ),
+              ],
+              // 기타 → 직접 입력
+              AnimatedSize(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: Alignment.topCenter,
+                child: _isOther
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.md),
+                        child: TextField(
+                          key: const Key('job-custom-field'),
+                          controller: _jobCustom,
+                          focusNode: _jobCustomFocus,
+                          maxLength: AppLimits.jobCustomMax,
+                          textInputAction: TextInputAction.done,
+                          style: AppTypography.bodyLarge.copyWith(
+                            color: AppColors.heading,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: '하는 일을 직접 적어 주세요 (예: 바리스타)',
+                            helperText: '카드에 이 글자가 보여요',
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      )
+                    : const SizedBox(width: double.infinity),
               ),
             ],
           ),
@@ -132,7 +190,11 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
         BottomCta(
           child: FilledButton(
             onPressed: _valid
-                ? () => widget.onSubmit(_nickname.text.trim(), _jobTag!)
+                ? () => widget.onSubmit(
+                    _nickname.text.trim(),
+                    _jobTag!,
+                    _isOther ? _jobCustom.text.trim() : null,
+                  )
                 : null,
             child: Text(widget.submitLabel),
           ),
