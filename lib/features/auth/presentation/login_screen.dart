@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -49,73 +48,115 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /// 상황별 카드 3장을 균형 배치 위치에서 아래로 내리는 거리
+  static const _cardsOffsetY = 30.0;
+
   @override
   Widget build(BuildContext context) {
-    final isIos = defaultTargetPlatform == TargetPlatform.iOS;
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 위 여백 : 소개 : 사이 여백 : 카드 영역 비율로 세로 배치
-            const Spacer(flex: 3),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.page),
-              child: Column(
-                children: [
-                  const BindLogo(size: 32),
-                  const SizedBox(height: AppSpacing.lg),
-                  const Text(
-                    Brand.sloganTwoLines,
-                    style: AppTypography.display,
-                    textAlign: TextAlign.center,
+        child: LayoutBuilder(
+          builder: (context, c) {
+            // 카드 미리보기는 화면 높이의 30%(최대 270)로 고정해,
+            // 긴 화면에서 카드·로그인 영역이 아래로 처지지 않게 한다.
+            final cardsHeight = (c.maxHeight * 0.3).clamp(0.0, 270.0);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 남는 높이는 위 3 : 소개-카드 사이 2 : 카드-로그인 사이 3 으로 나눈다.
+                const Spacer(flex: 3),
+                const _Intro(),
+                const Spacer(flex: 2),
+                // 카드만 아래로 살짝 내린다(다른 요소 위치는 그대로).
+                Transform.translate(
+                  offset: const Offset(0, _cardsOffsetY),
+                  child: SizedBox(
+                    height: cardsHeight,
+                    child: const _CardPreview(),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    Brand.startCall,
-                    style: AppTypography.bodyLarge.copyWith(
-                      color: AppColors.secondary,
-                    ),
-                    textAlign: TextAlign.center,
+                ),
+                const Spacer(flex: 3),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.page,
                   ),
-                ],
-              ),
-            ),
-            const Spacer(flex: 1),
-            const Expanded(flex: 9, child: _CardPreview()),
-            BottomCta(
-              // Google 가이드: Google 버튼은 다른 로그인 버튼과 크기·무게가 비슷해야 한다.
-              top: isIos
-                  ? FilledButton.icon(
-                      onPressed: _loading ? null : _signIn,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        shape: const StadiumBorder(),
-                        backgroundColor: AppColors.heading,
-                        foregroundColor: AppColors.canvas,
-                      ),
-                      icon: const Icon(Icons.apple, size: 22),
-                      label: const Text('Apple로 계속하기'),
-                    )
-                  : null,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  GoogleSignInButton(onPressed: _signIn, loading: _loading),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    '계속하면 이용약관·개인정보 처리방침에 동의하게 돼요.',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.tertiary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ],
+                  child: _LoginArea(onGoogle: _signIn, loading: _loading),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
+            );
+          },
         ),
       ),
+    );
+  }
+}
+
+/// 로고 + 슬로건 + 한 줄 문구
+class _Intro extends StatelessWidget {
+  const _Intro();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.page),
+      child: Column(
+        children: [
+          const BindLogo(size: 32),
+          const SizedBox(height: AppSpacing.lg),
+          const Text(
+            Brand.sloganTwoLines,
+            style: AppTypography.display,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            Brand.startCall,
+            style: AppTypography.bodyLarge.copyWith(color: AppColors.secondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 로그인 버튼 영역. 버튼 두 개(Apple + Google) 높이를 미리 잡아 두고 아래부터 채운다.
+/// Apple 로그인을 붙이면 Google 버튼 위 빈 자리에 들어가서 화면 배치가 바뀌지 않는다.
+class _LoginArea extends StatelessWidget {
+  const _LoginArea({required this.onGoogle, required this.loading});
+
+  final VoidCallback onGoogle;
+  final bool loading;
+
+  /// 로그인 버튼 높이(GoogleSignInButton과 같다)
+  static const _buttonHeight = 48.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: _buttonHeight * 2 + AppSpacing.sm + 4,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // TODO(auth): Apple 로그인(sign_in_with_apple + Firebase Auth)을 붙이면
+              // 여기에 "Apple로 계속하기" 버튼을 넣는다. Google 가이드에 따라 두 버튼은
+              // 크기·무게가 같아야 한다. iOS 출시에는 Apple 로그인이 필수다.
+              GoogleSignInButton(onPressed: onGoogle, loading: loading),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          '계속하면 이용약관·개인정보 처리방침에 동의하게 돼요.',
+          style: AppTypography.caption.copyWith(color: AppColors.tertiary),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }
