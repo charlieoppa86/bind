@@ -7,6 +7,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
+import '../../../core/links/app_links.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
@@ -286,6 +287,22 @@ class _MenuCard extends ConsumerWidget {
             icon: Icons.menu_book_rounded,
             label: '사용법 가이드',
             onTap: () => context.push(Routes.myGuide),
+          ),
+          _Menu(
+            icon: Icons.mail_outline_rounded,
+            label: '문의하기',
+            onTap: () =>
+                openLink(ref, AppLinks.supportMail(subject: '[BIND] 문의')),
+          ),
+          _Menu(
+            icon: Icons.description_outlined,
+            label: '이용약관',
+            onTap: () => openLink(ref, AppLinks.terms),
+          ),
+          _Menu(
+            icon: Icons.privacy_tip_outlined,
+            label: '개인정보 처리방침',
+            onTap: () => openLink(ref, AppLinks.privacy),
           ),
           _Menu(
             icon: Icons.manage_accounts_outlined,

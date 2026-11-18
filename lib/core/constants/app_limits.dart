@@ -45,6 +45,9 @@ abstract final class AppLimits {
   /// US-010 서로 다른 신고자 수 누적 시 이용 정지
   static const reportsUntilSuspension = 2;
 
+  /// 이용 정지 이의 제기 검토 기한(이용약관 제9조)
+  static const appealReview = Duration(days: 7);
+
   /// US-016 최근 주제 보관 개수
   static const recentTopicsCount = 3;
 

@@ -6,6 +6,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/enums.dart';
+import '../../../core/links/app_links.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/apple_sign_in_button.dart';
 import '../../../core/widgets/bind_logo.dart';
@@ -172,12 +173,47 @@ class _LoginArea extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        Text(
-          '계속하면 이용약관·개인정보 처리방침에 동의하게 돼요.',
-          style: AppTypography.caption.copyWith(color: AppColors.tertiary),
-          textAlign: TextAlign.center,
-        ),
+        const _LegalNotice(),
       ],
+    );
+  }
+}
+
+/// "계속하면 이용약관·개인정보 처리방침에 동의하게 돼요." — 두 문서 이름을 누르면 웹 페이지가 열린다.
+class _LegalNotice extends ConsumerWidget {
+  const _LegalNotice();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = AppTypography.caption.copyWith(color: AppColors.tertiary);
+    WidgetSpan link(String label, Uri uri) => WidgetSpan(
+      alignment: PlaceholderAlignment.baseline,
+      baseline: TextBaseline.alphabetic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => openLink(ref, uri),
+        child: Text(
+          label,
+          style: style.copyWith(
+            color: AppColors.secondary,
+            decoration: TextDecoration.underline,
+            decorationColor: AppColors.secondary,
+          ),
+        ),
+      ),
+    );
+    return Text.rich(
+      TextSpan(
+        style: style,
+        children: [
+          const TextSpan(text: '계속하면 '),
+          link('이용약관', AppLinks.terms),
+          const TextSpan(text: '·'),
+          link('개인정보 처리방침', AppLinks.privacy),
+          const TextSpan(text: '에 동의하게 돼요.'),
+        ],
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }

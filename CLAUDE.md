@@ -76,5 +76,6 @@ dart run flutter_launcher_icons                   # 앱 아이콘 다시 생성(
 - **위치(GPS)·PIN·체류 시간 제한은 없다**(2026-11-16 결정). 체크인은 한 화면에서 장소를 검색해 고르고 주제 한 줄을 올리면 끝난다. 체크아웃할 때까지 카드가 보인다.
 - 장소는 **카카오 로컬 키워드 장소 검색**으로 고른다(2026-11-16 결정, 우편번호 서비스는 가게 이름 검색이 안 돼서 제외). 같은 장소 판정은 카카오 장소 ID(`Spot.placeId`, Firestore `spots/{placeId}`)로 한다.
 - 카카오 REST 키는 앱에 넣지 않는다. 검색은 Cloud Functions `searchPlaces`(Secret `KAKAO_REST_API_KEY`)가 대신 호출한다. 앱은 `placeSearchProvider`(lib/data/place/place_search.dart)만 쓴다.
+- 약관·개인정보처리방침은 별도 저장소 `charlieoppa86/bind-policy`(GitHub Pages)에 있다. 앱 밖 주소와 문의 이메일은 `AppLinks`(lib/core/links/app_links.dart)만 쓰고, 열 때는 `openLink`를 쓴다(테스트는 `linkOpenerProvider`를 바꿔 끼움). 수집 항목·보관 기간·탈퇴 처리(`deleteAccount`, TTL)를 바꾸면 방침도 같이 고친다.
 - `assets/images/`의 Google G 로고는 공식 에셋을 자른 것이라 수정·재채색 금지.
 - Firebase 프로젝트는 `bind-app-2026`(Firestore 서울 `asia-northeast3`, Functions 같은 리전), 앱 식별자는 Android·iOS 모두 `app.bind.mobile`.

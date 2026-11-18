@@ -5,6 +5,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
+import '../../../core/links/app_links.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../session/account_controller.dart';
 
@@ -38,7 +39,8 @@ class SuspendedScreen extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.sm),
                       const Text(
                         '서로 다른 사용자 ${AppLimits.reportsUntilSuspension}명에게 '
-                        '신고가 누적되어 BIND 이용이 정지되었습니다.',
+                        '신고가 누적되었거나 이용 규칙을 크게 어겨 '
+                        'BIND 이용이 정지되었습니다.',
                         style: AppTypography.body,
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -48,11 +50,30 @@ class SuspendedScreen extends ConsumerWidget {
                           color: AppColors.fill,
                           borderRadius: BorderRadius.circular(AppRadius.card),
                         ),
-                        child: const Text(
-                          '정지 기간에는 체크인, 대화 요청, 채팅을 이용할 수 없어요. '
-                          '정지에 이의가 있다면 고객센터로 문의해 주세요.',
-                          style: AppTypography.body,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '정지 기간에는 체크인, 대화 요청, 채팅을 이용할 수 없어요. '
+                              '정지에 이의가 있다면 아래 이메일로 보내 주세요. '
+                              '${AppLimits.appealReview.inDays}일 안에 검토 결과를 알려 드려요.',
+                              style: AppTypography.body,
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            const SelectableText(
+                              AppLinks.supportEmail,
+                              style: AppTypography.supportingTitle,
+                            ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      TextButton(
+                        onPressed: () => openLink(
+                          ref,
+                          AppLinks.supportMail(subject: '[BIND] 이용 정지 이의 제기'),
+                        ),
+                        child: const Text('이의 제기 메일 보내기'),
                       ),
                     ],
                   ),
