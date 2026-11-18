@@ -16,7 +16,6 @@ Future<bool> initFirebase() async {
     return false;
   }
   await _activateAppCheck();
-  // TODO(fcm): FirebaseMessaging.onBackgroundMessage 등록, 권한 요청, 토큰 저장
   return true;
 }
 

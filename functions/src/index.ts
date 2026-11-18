@@ -9,6 +9,8 @@
  * onReportCreated: 서로 다른 신고자 2명이 쌓이면 대상 계정을 정지하고 카드를 내린다.
  * onReviewCreated: "좋았어요"면 상대의 좋았어요 수를 올리고, 신뢰 표시 기준을 넘으면 카드에 붙인다.
  * onCheckinWritten: 체크인이 생기거나 내려가면 그 장소의 지금 인원(activeCount)을 다시 센다.
+ * onRequestWritten / (onMessageCreated·onCheckinWritten 안) : 푸시 알림(개별 토큰 발송)
+ * sendTopicPush: 운영자 토픽 발송(관리자 권한), sendTestPush: 내 기기로 테스트 발송
  * deleteAccount: 탈퇴. 닉네임 예약을 풀고 프로필을 "떠난 사용자"로 표시한 뒤
  *   Auth 계정을 지운다(클라이언트 규칙으로는 못 하는 일).
  *
@@ -18,6 +20,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
@@ -143,6 +146,9 @@ export const deleteAccount = onCall(async (request) => {
   const chats = await db.collection("chats").where("memberUids", "array-contains", uid).get();
   const batch = db.batch();
   chats.docs.forEach((d) => batch.update(d.ref, { leftUids: FieldValue.arrayUnion(uid) }));
+  // 푸시 토큰을 지운다(탈퇴한 사람에게 알림이 가지 않게).
+  const tokens = await userRef.collection("fcmTokens").get();
+  tokens.docs.forEach((d) => batch.delete(d.ref));
   // 체크인 카드도 내린다(장소 인원은 onCheckinWritten이 다시 센다).
   const cards = await db
     .collection("checkins")
@@ -186,8 +192,178 @@ export const onCheckinWritten = onDocumentWritten(
     if (before?.spotId) spotIds.add(before.spotId as string);
     if (after?.spotId) spotIds.add(after.spotId as string);
     await Promise.all([...spotIds].map(recountSpot));
+
+    // US-015: 새로 체크인하면 "누가 오면 알려줘"를 켜 둔 같은 장소 사람에게 한 번 알린다.
+    if (!before && after && after.checkedOutAt == null) {
+      await notifyArrival(after.spotId as string, after.uid as string, after);
+    }
   },
 );
+
+// ── 푸시 알림(FCM) ─────────────────────────────────────
+
+const PUSH_CHANNEL = "bind_default"; // 앱의 Android 알림 채널(FirebasePushPlatform.channelId)
+
+interface PushPayload {
+  title: string;
+  body: string;
+  type: string; // request · accepted · rejected · expired · message · arrival · notice · test
+  route?: string; // 앱 안 화면 경로(앱은 허용된 경로만 연다)
+  collapseKey?: string; // 같은 대화방 알림은 하나로 묶는다
+}
+
+function messageFor(p: PushPayload) {
+  const data: Record<string, string> = { type: p.type };
+  if (p.route) data.route = p.route;
+  return {
+    notification: { title: p.title, body: p.body },
+    data,
+    android: {
+      priority: "high" as const,
+      collapseKey: p.collapseKey,
+      notification: {
+        channelId: PUSH_CHANNEL,
+        icon: "ic_stat_bind",
+        color: "#2F80FF",
+        tag: p.collapseKey,
+      },
+    },
+    apns: {
+      payload: { aps: { sound: "default", threadId: p.collapseKey } },
+    },
+  };
+}
+
+/** 한 사람의 모든 기기로 보낸다. 만료된 토큰은 지운다. */
+async function pushToUser(uid: string, p: PushPayload): Promise<void> {
+  const db = getFirestore();
+  const snap = await db.collection("users").doc(uid).collection("fcmTokens").get();
+  if (snap.empty) return;
+  const tokens = snap.docs.map((d) => d.id);
+  const res = await getMessaging().sendEachForMulticast({ tokens, ...messageFor(p) });
+  const stale: Promise<unknown>[] = [];
+  res.responses.forEach((r, i) => {
+    const code = r.error?.code;
+    if (
+      code === "messaging/registration-token-not-registered" ||
+      code === "messaging/invalid-registration-token" ||
+      code === "messaging/invalid-argument"
+    ) {
+      stale.push(snap.docs[i].ref.delete());
+    }
+  });
+  await Promise.all(stale);
+}
+
+/** 토픽을 구독한 모든 기기로 보낸다. */
+async function pushToTopic(topic: string, p: PushPayload): Promise<string> {
+  return getMessaging().send({ topic, ...messageFor(p) });
+}
+
+/** [to]가 [from]을 차단했으면 알림을 보내지 않는다. */
+async function blocked(to: string, from: string): Promise<boolean> {
+  const doc = await getFirestore()
+    .collection("users").doc(to).collection("blocks").doc(from).get();
+  return doc.exists;
+}
+
+async function nicknameOf(uid: string): Promise<string> {
+  const user = await getFirestore().collection("users").doc(uid).get();
+  return (user.get("nickname") as string | undefined) ?? "상대";
+}
+
+/** 요청이 생기거나 상태가 바뀌면 알린다(sendRequest·respondRequest·expireRequests 모두 여기로). */
+export const onRequestWritten = onDocumentWritten(
+  "chatRequests/{requestId}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after) return;
+    const id = event.params.requestId;
+    const from = after.fromUid as string;
+    const to = after.toUid as string;
+
+    // 새 요청 → 받는 사람
+    if (!before) {
+      if (await blocked(to, from)) return;
+      await pushToUser(to, {
+        type: "request",
+        title: "새 대화 요청",
+        body: `${after.fromNickname ?? "누군가"}님: "${after.message}"`,
+        route: `/requests/received/${id}`,
+      });
+      return;
+    }
+    if (before.status === after.status || before.status !== "pending") return;
+
+    // 수락·거절·만료 → 보낸 사람
+    const name = await nicknameOf(to);
+    switch (after.status) {
+      case "accepted":
+        await pushToUser(from, {
+          type: "accepted",
+          title: "대화 요청이 수락됐어요",
+          body: `${name}님과 대화를 시작해 보세요`,
+          route: after.chatId ? `/chats/${after.chatId}` : "/requests/sent",
+        });
+        break;
+      case "rejected":
+        await pushToUser(from, {
+          type: "rejected",
+          title: "대화 요청 결과",
+          body: `${name}님은 이번엔 어렵대요`,
+          route: "/requests/sent",
+        });
+        break;
+      case "expired":
+        await pushToUser(from, {
+          type: "expired",
+          title: "요청이 끝났어요",
+          body: `${name}님이 30분 안에 답하지 않아 요청이 끝났어요`,
+          route: "/requests/sent",
+        });
+        break;
+    }
+  },
+);
+
+/** 운영자: 토픽으로 한 번에 보내기(관리자 커스텀 클레임 admin=true만) */
+export const sendTopicPush = onCall(async (request) => {
+  if (request.auth?.token.admin !== true) {
+    throw new HttpsError("permission-denied", "관리자만 보낼 수 있어요.");
+  }
+  const topic = String(request.data?.topic ?? "");
+  const title = String(request.data?.title ?? "").trim();
+  const body = String(request.data?.body ?? "").trim();
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(topic) || !title) {
+    throw new HttpsError("invalid-argument", "토픽과 제목을 확인해 주세요.");
+  }
+  const route = typeof request.data?.route === "string" ? request.data.route : undefined;
+  const id = await pushToTopic(topic, { type: "notice", title, body, route });
+  return { messageId: id };
+});
+
+/** 개발용: 내 기기로 테스트 알림(token: 내 토큰들, topic: 내 개인 토픽 u_{uid}) */
+export const sendTestPush = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요해요.");
+  const viaTopic = request.data?.mode === "topic";
+  // 백그라운드·종료 상태를 시험하려고 몇 초 뒤에 보낼 수 있다(최대 15초).
+  const delay = Math.min(Math.max(Number(request.data?.delaySeconds ?? 0), 0), 15);
+  if (delay > 0) await new Promise((r) => setTimeout(r, delay * 1000));
+  const payload: PushPayload = {
+    type: "test",
+    title: viaTopic ? "토픽 테스트 알림" : "토큰 테스트 알림",
+    body: "누르면 요청 화면으로 이동해요",
+    route: "/requests/received",
+  };
+  if (viaTopic) {
+    await pushToTopic(`u_${uid}`, payload);
+  } else {
+    await pushToUser(uid, payload);
+  }
+  return { ok: true };
+});
 
 // ── 2-2. 대화 요청 ─────────────────────────────────────
 
@@ -293,7 +469,6 @@ export const sendRequest = onCall(async (request) => {
     fromJobCustom: me.jobCustom ?? null,
     chatId: null,
   });
-  // TODO(fcm): 받는 사람에게 푸시
   return { result: "sent" satisfies SendResult, requestId: ref.id };
 });
 
@@ -351,7 +526,6 @@ export const respondRequest = onCall(async (request) => {
       chatId: chatRef.id,
       respondedAt: FieldValue.serverTimestamp(),
     });
-    // TODO(fcm): 요청한 사람에게 "수락했어요" 푸시
     return { result: "accepted", chatId: chatRef.id };
   });
 });
@@ -396,7 +570,28 @@ export const onMessageCreated = onDocumentCreated(
       for (const o of others) update[`unread.${o}`] = FieldValue.increment(1);
       tx.update(chatRef, update);
     });
-    // TODO(fcm): 상대에게 새 메시지 푸시
+
+    // 새 메시지 → 상대(떠났거나 나를 차단했으면 보내지 않는다)
+    const chat = (await chatRef.get()).data();
+    if (!chat) return;
+    const left = (chat.leftUids as string[] | undefined) ?? [];
+    const others = (chat.memberUids as string[]).filter(
+      (u) => u !== sender && !left.includes(u),
+    );
+    const name = await nicknameOf(sender);
+    const text = String(msg.text ?? "");
+    await Promise.all(
+      others.map(async (o) => {
+        if (await blocked(o, sender)) return;
+        await pushToUser(o, {
+          type: "message",
+          title: name,
+          body: text.length > 100 ? `${text.slice(0, 100)}…` : text,
+          route: `/chats/${event.params.chatId}`,
+          collapseKey: `chat_${event.params.chatId}`,
+        });
+      }),
+    );
   },
 );
 
@@ -462,3 +657,39 @@ export const onReviewCreated = onDocumentCreated(
     }
   },
 );
+
+/** 같은 장소에서 "누가 오면 알려줘"를 켠 사람에게 알리고 설정을 끈다(한 번만). */
+async function notifyArrival(
+  spotId: string,
+  newcomer: string,
+  card: FirebaseFirestore.DocumentData,
+): Promise<void> {
+  const db = getFirestore();
+  const waiting = await db
+    .collection("checkins")
+    .where("spotId", "==", spotId)
+    .where("notifyWhenSomeoneArrives", "==", true)
+    .where("checkedOutAt", "==", null)
+    .get();
+  const owners = new Set<string>();
+  const batch = db.batch();
+  for (const d of waiting.docs) {
+    const owner = d.get("uid") as string;
+    if (owner === newcomer) continue;
+    owners.add(owner);
+    batch.update(d.ref, { notifyWhenSomeoneArrives: false });
+  }
+  if (owners.size === 0) return;
+  await batch.commit();
+  await Promise.all(
+    [...owners].map(async (owner) => {
+      if (await blocked(owner, newcomer)) return;
+      await pushToUser(owner, {
+        type: "arrival",
+        title: "누가 왔어요",
+        body: `${card.nickname ?? "누군가"}님이 체크인했어요: "${card.topic ?? ""}"`,
+        route: "/spot",
+      });
+    }),
+  );
+}

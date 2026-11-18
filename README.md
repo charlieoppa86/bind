@@ -55,10 +55,12 @@ firebase functions:secrets:set KAKAO_REST_API_KEY --project bind-app-2026   # �
 | --- | --- |
 | `searchPlaces` | 카카오 장소 검색 대신 호출 |
 | `sendRequest` / `respondRequest` / `expireRequests` | 대화 요청(같은 장소·하루 횟수·중복·차단 확인), 수락 시 채팅방 생성, 30분 만료 |
-| `onCheckinWritten` | 장소의 지금 인원 집계 |
-| `onMessageCreated` | 마지막 메시지·안 읽은 수 |
+| `onCheckinWritten` | 장소의 지금 인원 집계, 빈 장소 첫 입장 푸시 |
+| `onMessageCreated` | 마지막 메시지·안 읽은 수, 새 메시지 푸시 |
 | `onReportCreated` / `onReviewCreated` | 신고 누적 정지, 좋았어요 수·신뢰 표시 |
-| `deleteAccount` | 탈퇴(닉네임 해제·떠난 사용자 표시·카드 내림·계정 삭제) |
+| `onRequestWritten` | 요청 도착·수락·거절·만료 푸시 |
+| `sendTopicPush` / `sendTestPush` | 토픽 발송(관리자 클레임 `admin`) / 내 기기로 테스트 발송 |
+| `deleteAccount` | 탈퇴(닉네임 해제·떠난 사용자 표시·카드 내림·푸시 토큰 삭제·계정 삭제) |
 
 ## 구조
 
@@ -98,7 +100,7 @@ test/               흐름·단위 테스트
 ## 남은 일
 
 - **Apple 로그인**: iOS 출시에 필수(첫 화면에 버튼 자리 확보)
-- **푸시 알림(FCM)**: 요청 도착·수락·만료·새 메시지·빈 장소 첫 입장 알림(지금은 앱이 켜져 있을 때 화면 위 배너)
+- **iOS 푸시**: Firebase 콘솔에 APNs 인증 키(.p8) 등록, Xcode에서 서명 팀 지정(Push Notifications 권한은 `Runner.entitlements`에 있음)
 - **App Check·API 키 제한**: 정식 앱에서 온 요청만 서버가 받게(출시 전)
 - **결제**: BIND+ 구독(출시 후)
 - **주제 개수 제한 서버 확인**: 무료 1개·BIND+ 3개를 서버에서도 확인

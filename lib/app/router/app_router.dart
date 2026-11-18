@@ -33,6 +33,7 @@ import '../../features/spot/presentation/spot_feed_screen.dart';
 import 'overlay_pages.dart';
 import 'routes.dart';
 import 'scaffold_with_nav_bar.dart';
+import '../../features/my/presentation/notification_settings_screen.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -237,6 +238,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                     ('consent', ConsentHistoryScreen()),
                     ('guide', MyGuideScreen()),
                     ('account', AccountScreen()),
+                    ('notifications', NotificationSettingsScreen()),
                   ])
                     GoRoute(
                       path: path,

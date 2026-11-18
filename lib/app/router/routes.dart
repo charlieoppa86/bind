@@ -50,6 +50,7 @@ abstract final class Routes {
   static const myConsent = '/my/consent';
   static const myGuide = '/my/guide';
   static const myAccount = '/my/account';
+  static const myNotifications = '/my/notifications';
 
   // 글로벌
   static String report(String targetId, {String? source}) =>

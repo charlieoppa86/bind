@@ -39,6 +39,7 @@
   - 신뢰가 필요한 일은 Functions: 요청 보내기·수락(`sendRequest`/`respondRequest`), 만료(`expireRequests`), 장소 인원(`onCheckinWritten`), 마지막 메시지·안 읽은 수(`onMessageCreated`), 정지(`onReportCreated`), 좋았어요 수(`onReviewCreated`), 탈퇴(`deleteAccount`).
 - 세션(`lib/features/session/session.dart`)은 라우터 가드의 기준이다. 데모 저장소가 로그인·온보딩·체크인 시 세션을 갱신한다. Firebase 연결 시 이 Notifier만 교체하면 라우터 가드는 그대로 동작한다.
 - 앱 안 알림(요청 도착·수락·만료 등)은 `inAppNoticeProvider`로 보내면 화면 위 배너로 뜬다.
+- 푸시(FCM)는 `PushController`(lib/core/push/, `pushProvider`)가 권한·토큰(`users/{uid}/fcmTokens`)·토픽·받은 알림을 관리한다. 서버는 data에 `type`·`route`를 넣어 보내고, 앱은 `PushRoute.parse`로 허용된 앱 안 경로만 연다. 알림 채널 id는 `bind_default`(앱·서버 같게).
 
 ## 명령
 - `flutter analyze` / `flutter test` — 변경 후 항상 둘 다 통과시킨다

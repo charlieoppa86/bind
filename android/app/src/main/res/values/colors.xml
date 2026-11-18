@@ -3,4 +3,5 @@
     <!-- AppColors.canvas: 앱은 다크 모드가 기본이라 시작 화면도 어둡게 -->
     <color name="bind_background">#17171C</color>
 	<color name="ic_launcher_background">#17171C</color>
+    <color name="bind_primary">#2F80FF</color>
 </resources>

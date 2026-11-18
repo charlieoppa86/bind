@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/enums.dart';
+import '../../core/push/push_controller.dart';
 import '../../data/account/account_repository.dart';
 import '../../data/demo/demo_store.dart';
 import '../../data/live/live_mode.dart';
@@ -54,6 +57,13 @@ class AccountController {
     final onboarded = _ref.read(demoStoreProvider).me != null;
     _session.signedIn(uid: uid, isOnboarded: onboarded);
     if (profile?.suspended ?? false) _session.suspend();
+    if (onboarded) _startPush(uid);
+  }
+
+  /// 실제 모드에서 온보딩을 마친 사용자만 푸시를 켠다(권한 팝업이 여기서 뜬다).
+  void _startPush(String uid) {
+    if (!_ref.read(liveModeProvider)) return;
+    unawaited(_ref.read(pushProvider.notifier).start(uid));
   }
 
   /// 데모 저장소에 있는 닉네임 + 서버의 닉네임 예약을 함께 본다.
@@ -66,6 +76,7 @@ class AccountController {
     final draft = _store.draftUser(_uid);
     await _repo.createProfile(draft);
     _store.completeOnboarding();
+    _startPush(_uid);
   }
 
   Future<void> updateProfile(
@@ -90,6 +101,7 @@ class AccountController {
   }
 
   Future<void> signOut() async {
+    await _ref.read(pushProvider.notifier).stop();
     _ref.read(liveSyncProvider).stop();
     await _repo.signOut();
     if (!_isDemo) _store.enter(null);
@@ -98,6 +110,7 @@ class AccountController {
   }
 
   Future<void> deleteAccount() async {
+    await _ref.read(pushProvider.notifier).stop();
     _ref.read(liveSyncProvider).stop();
     await _repo.deleteAccount();
     _store.deleteAccount();

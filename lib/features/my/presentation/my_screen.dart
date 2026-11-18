@@ -10,6 +10,7 @@ import '../../../core/constants/app_limits.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
+import '../../../core/push/push_controller.dart';
 import 'plus_prompt.dart';
 import '../../../core/widgets/bind_logo.dart';
 
@@ -269,6 +270,7 @@ class _MenuCard extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Column(
         children: [
+          const _NotificationsMenu(),
           _Menu(
             icon: Icons.block_rounded,
             label: '차단 목록',
@@ -312,6 +314,22 @@ class _Stat extends StatelessWidget {
           Text(label, style: AppTypography.caption),
         ],
       ),
+    );
+  }
+}
+
+/// "알림" — 안 읽은 알림 수만 구독
+class _NotificationsMenu extends ConsumerWidget {
+  const _NotificationsMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(pushProvider.select((s) => s.unread));
+    return _Menu(
+      icon: Icons.notifications_none_rounded,
+      label: '알림',
+      trailing: unread == 0 ? null : '새 알림 $unread',
+      onTap: () => context.push(Routes.myNotifications),
     );
   }
 }

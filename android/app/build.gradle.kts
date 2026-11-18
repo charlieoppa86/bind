@@ -9,12 +9,15 @@ plugins {
 
 android {
     namespace = "app.bind.mobile"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_local_notifications·androidx.core 최신 버전이 37을 요구한다(앱의 minSdk·targetSdk와는 별개)
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications(알림 채널) 요구
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -49,4 +52,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
