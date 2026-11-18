@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../data/account/account_repository.dart';
 import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../../core/notice/in_app_notice.dart';
@@ -29,6 +30,9 @@ class AccountScreen extends ConsumerWidget {
     if (ok != true) return;
     try {
       await ref.read(accountProvider).deleteAccount();
+    } on AuthCanceledException {
+      // Apple 확인 창을 닫았으면 탈퇴하지 않고 그대로 둔다.
+      return;
     } catch (e) {
       debugPrint('[BIND] 탈퇴 실패: $e');
       ref

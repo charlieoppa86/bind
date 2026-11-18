@@ -25,9 +25,14 @@ class NoGoogleAccountException implements Exception {
   const NoGoogleAccountException();
 }
 
+/// 탈퇴 전 Apple 재인증 창을 사용자가 닫았을 때(탈퇴하지 않는다)
+class AuthCanceledException implements Exception {
+  const AuthCanceledException();
+}
+
 /// 로그인·내 프로필(users/{uid}) 저장소.
 ///
-/// - [FirebaseAccountRepository]: Google 로그인 + Firestore
+/// - [FirebaseAccountRepository]: Google 로그인(Android·iOS)·Apple 로그인(iOS) + Firestore
 /// - [DemoAccountRepository]: Firebase 없이 화면 흐름 확인용
 abstract interface class AccountRepository {
   /// 앱을 다시 켰을 때 로그인돼 있던 사용자 uid(없으면 null)
@@ -35,6 +40,9 @@ abstract interface class AccountRepository {
 
   /// Google 로그인. 사용자가 취소하면 null.
   Future<String?> signIn();
+
+  /// Apple 로그인(iOS만). 사용자가 취소하면 null.
+  Future<String?> signInWithApple();
 
   /// 내 프로필. 아직 온보딩을 안 했으면 null.
   Future<AppUser?> loadProfile(String uid);
@@ -57,6 +65,10 @@ abstract interface class AccountRepository {
   Future<void> markGuideSeen(String uid);
 
   Future<void> signOut();
+
+  /// 탈퇴 첫 단계: Apple로 가입한 계정이면 Apple 연결(토큰)을 해지한다.
+  /// 재인증 창을 닫으면 [AuthCanceledException](아무것도 지우지 않은 상태).
+  Future<void> revokeForDeletion();
 
   /// 탈퇴: 서버(Functions)가 닉네임 해제·프로필 삭제 표시·계정 삭제를 한다.
   Future<void> deleteAccount();
@@ -122,6 +134,57 @@ class FirebaseAccountRepository implements AccountRepository {
       GoogleAuthProvider.credential(idToken: idToken),
     );
     return result.user?.uid;
+  }
+
+  /// Apple 로그인은 Firebase Auth가 iOS 기본 Apple 로그인 창을 띄운다.
+  /// 이름·이메일은 받지 않는다(BIND는 온보딩에서 닉네임만 쓴다).
+  @override
+  Future<String?> signInWithApple() async {
+    try {
+      final result = await _auth.signInWithProvider(AppleAuthProvider());
+      return result.user?.uid;
+    } on FirebaseAuthException catch (e) {
+      if (_isCanceled(e)) return null;
+      rethrow;
+    }
+  }
+
+  /// Apple 로그인 창을 닫았을 때 오는 오류(ASAuthorizationError 1001 등)
+  static bool _isCanceled(FirebaseAuthException e) =>
+      const {
+        'canceled',
+        'cancelled',
+        'web-context-cancelled',
+        'user-cancelled',
+      }.contains(e.code) ||
+      '${e.message}'.contains('1001');
+
+  static const _appleProviderId = 'apple.com';
+
+  /// App Store 규정: Apple로 가입한 계정을 지우면 Apple 토큰도 해지한다.
+  /// 해지에는 새 인증 코드가 필요해서 Apple 창을 한 번 더 띄운다.
+  @override
+  Future<void> revokeForDeletion() async {
+    final user = _auth.currentUser;
+    if (user == null ||
+        !user.providerData.any((p) => p.providerId == _appleProviderId)) {
+      return;
+    }
+    final UserCredential cred;
+    try {
+      cred = await user.reauthenticateWithProvider(AppleAuthProvider());
+    } on FirebaseAuthException catch (e) {
+      if (_isCanceled(e)) throw const AuthCanceledException();
+      rethrow;
+    }
+    final code = cred.additionalUserInfo?.authorizationCode;
+    if (code == null) return;
+    try {
+      await _auth.revokeTokenWithAuthorizationCode(code);
+    } catch (e) {
+      // 해지가 실패해도 탈퇴는 진행한다(계정 삭제가 우선).
+      debugPrint('[BIND] Apple 토큰 해지 실패: $e');
+    }
   }
 
   @override
@@ -219,6 +282,9 @@ class DemoAccountRepository implements AccountRepository {
   }
 
   @override
+  Future<String?> signInWithApple() => signIn();
+
+  @override
   Future<AppUser?> loadProfile(String uid) async => null;
 
   @override
@@ -241,6 +307,9 @@ class DemoAccountRepository implements AccountRepository {
 
   @override
   Future<void> signOut() async {}
+
+  @override
+  Future<void> revokeForDeletion() async {}
 
   @override
   Future<void> deleteAccount() async {}

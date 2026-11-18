@@ -39,8 +39,13 @@ class AccountController {
   }
 
   /// Google 로그인. 사용자가 취소하면 false.
-  Future<bool> signIn() async {
-    final uid = await _repo.signIn();
+  Future<bool> signIn() => _signInWith(_repo.signIn);
+
+  /// Apple 로그인(iOS). 사용자가 취소하면 false.
+  Future<bool> signInWithApple() => _signInWith(_repo.signInWithApple);
+
+  Future<bool> _signInWith(Future<String?> Function() signIn) async {
+    final uid = await signIn();
     if (uid == null) return false;
     await _enter(uid);
     return true;
@@ -109,7 +114,9 @@ class AccountController {
     _store.signOut();
   }
 
+  /// 탈퇴. Apple 재인증 창을 닫으면 [AuthCanceledException]이 나고 아무것도 지우지 않는다.
   Future<void> deleteAccount() async {
+    await _repo.revokeForDeletion();
     await _ref.read(pushProvider.notifier).stop();
     _ref.read(liveSyncProvider).stop();
     await _repo.deleteAccount();

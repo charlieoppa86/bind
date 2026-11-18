@@ -60,6 +60,11 @@ abstract final class AppColors {
   static const googleDarkStroke = Color(0xFF8E918F);
   static const googleDarkText = Color(0xFFE3E3E3);
 
+  /// Apple 로그인 버튼 White 스타일(어두운 바탕용)
+  /// (https://developer.apple.com/design/human-interface-guidelines/sign-in-with-apple)
+  static const appleWhiteFill = Color(0xFFFFFFFF);
+  static const appleWhiteText = Color(0xFF000000);
+
   /// 컨트롤 경계선
   static const controlBorder = Color(0x29FFFFFF);
 

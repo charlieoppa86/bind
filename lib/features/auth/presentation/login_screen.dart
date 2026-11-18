@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -6,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/apple_sign_in_button.dart';
 import '../../../core/widgets/bind_logo.dart';
 import '../../../core/widgets/emoji_avatar.dart';
 import '../../../core/widgets/google_sign_in_button.dart';
@@ -22,14 +24,22 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
-  bool _loading = false;
+/// 로그인 수단. Apple은 iOS에서만 보인다.
+enum _SignInMethod { google, apple }
 
-  Future<void> _signIn() async {
-    // TODO(auth): iOS는 sign_in_with_apple도 추가
-    setState(() => _loading = true);
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  /// 진행 중인 로그인(그동안 두 버튼 모두 막는다)
+  _SignInMethod? _pending;
+
+  Future<void> _signIn(_SignInMethod method) async {
+    if (_pending != null) return;
+    setState(() => _pending = method);
+    final account = ref.read(accountProvider);
     try {
-      await ref.read(accountProvider).signIn();
+      await switch (method) {
+        _SignInMethod.google => account.signIn(),
+        _SignInMethod.apple => account.signInWithApple(),
+      };
     } on NoGoogleAccountException {
       ref
           .read(inAppNoticeProvider.notifier)
@@ -44,7 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(inAppNoticeProvider.notifier)
           .show(const InAppNotice('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.'));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _pending = null);
     }
   }
 
@@ -81,7 +91,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.page,
                   ),
-                  child: _LoginArea(onGoogle: _signIn, loading: _loading),
+                  child: _LoginArea(
+                    onGoogle: () => _signIn(_SignInMethod.google),
+                    onApple: () => _signIn(_SignInMethod.apple),
+                    pending: _pending,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
@@ -123,13 +137,19 @@ class _Intro extends StatelessWidget {
   }
 }
 
-/// 로그인 버튼 영역. 버튼 두 개(Apple + Google) 높이를 미리 잡아 두고 아래부터 채운다.
-/// Apple 로그인을 붙이면 Google 버튼 위 빈 자리에 들어가서 화면 배치가 바뀌지 않는다.
+/// 로그인 버튼 영역. 버튼 두 개 높이를 미리 잡아 두고 위부터 채운다.
+/// Google 버튼은 두 플랫폼 모두 같은 자리(위)에 있고, iOS는 그 아래에 Apple 버튼이 온다.
+/// Android는 Apple 자리가 비어 있어 화면 배치가 iOS와 같다.
 class _LoginArea extends StatelessWidget {
-  const _LoginArea({required this.onGoogle, required this.loading});
+  const _LoginArea({
+    required this.onGoogle,
+    required this.onApple,
+    required this.pending,
+  });
 
   final VoidCallback onGoogle;
-  final bool loading;
+  final VoidCallback onApple;
+  final _SignInMethod? pending;
 
   /// 로그인 버튼 높이(GoogleSignInButton과 같다)
   static const _buttonHeight = 48.0;
@@ -142,13 +162,21 @@ class _LoginArea extends StatelessWidget {
         SizedBox(
           height: _buttonHeight * 2 + AppSpacing.sm + 4,
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // TODO(auth): Apple 로그인(sign_in_with_apple + Firebase Auth)을 붙이면
-              // 여기에 "Apple로 계속하기" 버튼을 넣는다. Google 가이드에 따라 두 버튼은
-              // 크기·무게가 같아야 한다. iOS 출시에는 Apple 로그인이 필수다.
-              GoogleSignInButton(onPressed: onGoogle, loading: loading),
+              GoogleSignInButton(
+                onPressed: pending == null ? onGoogle : null,
+                loading: pending == _SignInMethod.google,
+              ),
+              // App Store 규정: Google 로그인이 있으면 Apple 로그인도 같은 크기로 둔다.
+              if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+                const SizedBox(height: AppSpacing.sm + 4),
+                AppleSignInButton(
+                  onPressed: pending == null ? onApple : null,
+                  loading: pending == _SignInMethod.apple,
+                ),
+              ],
             ],
           ),
         ),
