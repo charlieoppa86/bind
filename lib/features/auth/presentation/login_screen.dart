@@ -58,9 +58,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  /// 상황별 카드 3장을 균형 배치 위치에서 아래로 내리는 거리
-  static const _cardsOffsetY = 30.0;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,19 +70,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 남는 높이는 위 3 : 소개-카드 사이 2 : 카드-로그인 사이 2 로 나눈다.
-                // (카드-로그인 사이에는 Apple 버튼 자리가 이미 비어 있어 비율을 덜 준다)
+                // 남는 높이는 위 3 : 소개-카드 사이 2 : 카드-Google 버튼 사이 2 로 나눈다.
+                // Google 버튼이 로그인 영역 맨 위에 있으므로(Apple 자리는 그 아래),
+                // 카드 묶음은 소개 문구와 Google 버튼 사이 한가운데에 온다.
                 const Spacer(flex: 3),
                 const _Intro(),
                 const Spacer(flex: 2),
-                // 카드만 아래로 살짝 내린다(다른 요소 위치는 그대로).
-                Transform.translate(
-                  offset: const Offset(0, _cardsOffsetY),
-                  child: SizedBox(
-                    height: cardsHeight,
-                    child: const _CardPreview(),
-                  ),
-                ),
+                SizedBox(height: cardsHeight, child: const _CardPreview()),
                 const Spacer(flex: 2),
                 Padding(
                   padding: const EdgeInsets.symmetric(
