@@ -1,6 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Android 13+ 알림 권한(실행 중 요청) -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Firebase(로그인·Firestore·Functions·FCM), 카카오 장소 검색(Functions 경유) 통신 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ 알림 권한(실행 중 요청). 요청 도착·수락 알림용, 거절해도 앱 사용 가능 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 광고 ID 미사용: firebase_analytics(측정 SDK)가 자동으로 넣는 광고 관련 권한을 뺀다.
+         Play Console "광고 ID" 선언은 "사용 안 함"으로 한다. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
     <application
         android:label="BIND"
         android:name="${applicationName}"
@@ -9,6 +18,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:screenOrientation="portrait"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -37,6 +47,10 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/bind_primary" />
+        <!-- Firebase Analytics가 광고 ID를 수집하지 않게 한다(위 AD_ID 권한 제거와 함께) -->
+        <meta-data
+            android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
