@@ -11,6 +11,7 @@ import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
+import '../../../core/widgets/bind_logo.dart';
 
 /// 대화방 id 목록(최근 메시지순). 순서가 같으면 목록은 다시 그리지 않는다.
 final _chatIdsProvider = Provider.autoDispose<List<String>>((ref) {
@@ -35,7 +36,9 @@ class ChatListScreen extends ConsumerWidget {
       appBar: AppBar(
         centerTitle: false,
         titleSpacing: AppSpacing.page,
-        title: const Text('채팅', style: AppTypography.title),
+        title: const BrandedTitle(
+          child: Text('채팅', style: AppTypography.title),
+        ),
       ),
       body: ids.isEmpty
           ? const EmptyState(

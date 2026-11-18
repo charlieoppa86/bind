@@ -16,6 +16,7 @@ import '../../../data/demo/demo_store.dart';
 import '../../../data/models/place.dart';
 import '../../../data/models/spot.dart';
 import '../../../data/place/place_search.dart';
+import '../../../core/widgets/bind_logo.dart';
 
 /// 체크인 (US-004, US-005). 체크인 전 홈.
 ///
@@ -89,10 +90,13 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        centerTitle: false,
+        titleSpacing: AppSpacing.page,
+        title: const BindMark(),
         actions: [
           const _ChatsButton(),
           IconButton(
-            tooltip: '마이',
+            tooltip: '마이페이지',
             onPressed: () => context.go(Routes.my),
             icon: const Icon(Icons.person_outline_rounded),
           ),

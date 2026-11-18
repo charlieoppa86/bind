@@ -11,6 +11,7 @@ import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
 import 'plus_prompt.dart';
+import '../../../core/widgets/bind_logo.dart';
 
 /// 마이페이지
 ///
@@ -26,7 +27,9 @@ class MyScreen extends StatelessWidget {
         backgroundColor: AppColors.groupedBackground,
         centerTitle: false,
         titleSpacing: AppSpacing.page,
-        title: const Text('마이페이지', style: AppTypography.title),
+        title: const BrandedTitle(
+          child: Text('마이페이지', style: AppTypography.title),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: AppSpacing.xl),

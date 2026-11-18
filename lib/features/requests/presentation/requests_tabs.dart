@@ -11,6 +11,7 @@ import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
 import '../../../data/models/chat_request.dart';
+import '../../../core/widgets/bind_logo.dart';
 
 /// 요청함 탭(받은 요청 / 보낸 요청) 공통 상단 탭바.
 /// 하위 탭이 각각 라우트를 갖도록 TabBar 선택 시 go로 이동한다.
@@ -30,7 +31,9 @@ class _RequestsTabsScaffold extends StatelessWidget {
         appBar: AppBar(
           centerTitle: false,
           titleSpacing: AppSpacing.page,
-          title: const Text('요청', style: AppTypography.title),
+          title: const BrandedTitle(
+            child: Text('요청', style: AppTypography.title),
+          ),
           bottom: TabBar(
             onTap: (i) {
               if (i == index) return;

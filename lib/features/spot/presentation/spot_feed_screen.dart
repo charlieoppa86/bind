@@ -12,6 +12,7 @@ import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../../data/models/checkin.dart';
 import '../../safety/presentation/safety_menu.dart';
+import '../../../core/widgets/bind_logo.dart';
 
 /// 피드 카테고리 필터(화면 안 상태). 필터를 바꿔도 필터 바와 목록만 다시 그린다.
 class _FeedFilter extends Notifier<TopicCategory?> {
@@ -43,7 +44,7 @@ class SpotFeedScreen extends ConsumerWidget {
         centerTitle: false,
         titleSpacing: AppSpacing.page,
         toolbarHeight: 64,
-        title: _FeedHeader(spotId),
+        title: BrandedTitle(child: _FeedHeader(spotId)),
       ),
       body: RefreshIndicator(
         color: AppColors.primary,
@@ -103,9 +104,12 @@ class _Headcount extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final count = ref.watch(headcountProvider(spotId));
+    // 인원 수에는 나도 들어 있어서, 나를 뺀 사람 수(n-1)를 보여 준다.
+    final others = ref.watch(
+      headcountProvider(spotId).select((n) => n > 0 ? n - 1 : 0),
+    );
     return Text(
-      '지금 $count명이 같은 장소에 있어요',
+      others > 0 ? '지금 $others명이 같은 장소에 있어요' : '아직 같은 장소에 다른 사람이 없어요',
       style: AppTypography.caption.copyWith(color: AppColors.secondary),
     );
   }

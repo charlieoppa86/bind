@@ -52,7 +52,7 @@ flutter:
           weight: 700
 
 # 홈 화면 앱 아이콘: `dart run flutter_launcher_icons`로 Android·iOS 크기별 아이콘 생성
-# 원본: BIND 로고의 N만 잘라 흰색으로, 배경은 AppColors.canvas(#17171C)
+# 원본: assets/images/app_icon.png 로고의 그라데이션 마크만 잘라, 배경은 AppColors.canvas(#17171C)
 flutter_launcher_icons:
   android: true
   ios: true

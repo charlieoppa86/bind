@@ -71,6 +71,9 @@ void main() {
 
     // 스팟 피드: 같은 스팟 사람들의 카드
     expect(find.text('성수 워크라운지'), findsOneWidget);
+    // 데모 장소의 9명 + 나 = 10명 → 나를 뺀 9명만 보인다
+    expect(find.text('지금 9명이 같은 장소에 있어요'), findsOneWidget);
+    expect(find.byType(BindMark), findsOneWidget); // AppBar 왼쪽 마크
     expect(find.text('PM 커리어 피벗 얘기 나눠요'), findsOneWidget);
 
     // 대화 요청

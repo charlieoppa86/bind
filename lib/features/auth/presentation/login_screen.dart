@@ -63,7 +63,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 남는 높이는 위 3 : 소개-카드 사이 2 : 카드-로그인 사이 3 으로 나눈다.
+                // 남는 높이는 위 3 : 소개-카드 사이 2 : 카드-로그인 사이 2 로 나눈다.
+                // (카드-로그인 사이에는 Apple 버튼 자리가 이미 비어 있어 비율을 덜 준다)
                 const Spacer(flex: 3),
                 const _Intro(),
                 const Spacer(flex: 2),
@@ -75,7 +76,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: const _CardPreview(),
                   ),
                 ),
-                const Spacer(flex: 3),
+                const Spacer(flex: 2),
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.page,
@@ -102,8 +103,9 @@ class _Intro extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.page),
       child: Column(
         children: [
-          const BindLogo(size: 32),
-          const SizedBox(height: AppSpacing.lg),
+          // 첫 화면 로고는 기본(32)의 1.5배
+          const BindLogo(size: 48),
+          const SizedBox(height: AppSpacing.lg + 4),
           const Text(
             Brand.sloganTwoLines,
             style: AppTypography.display,
