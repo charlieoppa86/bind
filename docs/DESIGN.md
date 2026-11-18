@@ -460,4 +460,24 @@ Wanted's official system language is practical, encouraging, and centered on hel
 - 로고: 공식 에셋(signin-assets.zip, Dark·아이콘 PNG)에서 "G" 부분만 잘라 `assets/images/google_g_dark.png`(1x~4x)로 둔다. 재채색·변형·직접 그린 G 금지
 - 여백: Android 12 / 로고 뒤 10 / 12, iOS 16 / 12 / 16. 글자 14/20 Medium(Google Sans는 한글이 없어 Pretendard)
 - 문구: "Google로 로그인"(가이드 권장 문구 "Sign in with Google"의 한국어. Google 계정을 새로 만드는 게 아니라 Google 계정으로 이 앱에 들어간다는 뜻)
-- iOS의 Apple 버튼과 같은 높이·모양으로 두어 Google 버튼이 덜 눈에 띄지 않게 한다
+- Apple 버튼(구현 예정)과 같은 높이·모양으로 두어 Google 버튼이 덜 눈에 띄지 않게 한다. 첫 화면에 Apple 버튼 자리를 Google 버튼 위에 비워 둔다
+
+## 브랜드 로고·마크·앱 아이콘 (2026-11-17)
+
+원본은 `assets/images/app_icon.png`(그라데이션 마크 + 검정 "BIND", 흰 배경)이다. 앱에 쓰는 이미지는 이 원본에서 배경을 지워 만든다. 원본을 바꾸면 아래를 모두 다시 만든다.
+
+| 에셋 | 위젯 | 쓰는 곳 |
+|---|---|---|
+| `bind_logo_white.png`(1x~4x, 1x 높이 32) | `BindLogo(size:)` | 다크 화면 로고: 스플래시(44), 첫 화면(48). 마크는 원래 색, 글자만 흰색 |
+| `bind_logo.png`(1x~4x) | — | 밝은 배경용 원래 색 |
+| `bind_mark.png`(1x~4x, 1x 높이 20) | `BindMark`, `BrandedTitle` | 체크인·채팅·요청·마이페이지 탭 AppBar 제목 왼쪽, 체크인 화면 왼쪽 위 |
+| `assets/icon/app_icon.png` / `app_icon_foreground.png` | — | 홈 화면 앱 아이콘(마크만, 배경 `#17171C`) → `dart run flutter_launcher_icons`로 Android·iOS 전 크기 생성. 이 도구가 바꾸는 `ios/Runner.xcodeproj/project.pbxproj`는 되돌린다 |
+
+- 슬로건·문구는 `Brand`(lib/core/constants/brand.dart)에서만 가져온다: "같은 공간에서 같은 관심사로", "우리들의 스몰톡, 바인드".
+- 시작 화면: OS 시작 화면은 배경색(`#17171C`)만 보이고(Android 12+는 아이콘 자리를 비움, iOS LaunchScreen 배경도 같은 색), 이어서 앱 스플래시(로고 + 슬로건)가 뜬다. 두 화면이 겹쳐 보이지 않게 한다.
+- 첫 화면(로그인) 세로 배치: 남는 높이를 위 3 : 소개-카드 2 : 카드-로그인 2로 나누고, 상황별 카드 영역은 화면 높이 30%(최대 270)에 30 아래로 내린다. 로그인 영역은 버튼 두 개(Apple + Google) 높이를 미리 잡아 두고 아래부터 채운다.
+- 프로필 사진은 쓰지 않는다(US-W05). 사람 구분은 닉네임 첫 글자 아바타(`InitialAvatar`, `avatarTints`).
+
+## 키워드 칩 (2026-11-18)
+
+체크인·주제 수정 화면의 키워드는 `KeywordPicker`로 그린다. 묶음 이름(캡션, `tertiary`) 아래에 `SelectChip(compact)`을 줄바꿈으로 놓고, 기타를 고르면 아래에 직접 입력칸(10자)이 펼쳐진다. 하는 일 태그(온보딩 프로필)와 같은 모양이다.
