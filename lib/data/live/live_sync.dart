@@ -273,7 +273,14 @@ class LiveSync {
   }
 
   void _watchSpot(String? spotId) {
-    if (spotId == _spotId) return;
+    if (spotId == _spotId) {
+      // 체크인 전(지켜볼 장소 없음)이면 장소 데이터는 기다릴 게 없다.
+      if (spotId == null) {
+        _ready('spotCards');
+        _ready('spotInfo');
+      }
+      return;
+    }
     _spotCards?.cancel();
     _spot?.cancel();
     _spotId = spotId;

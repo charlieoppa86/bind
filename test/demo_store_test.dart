@@ -137,4 +137,27 @@ void main() {
     expect(db().me!.jobCustom, isNull);
     expect(db().me!.jobLabel, '셰프·요리');
   });
+
+  test('키워드는 24개, 기타를 고르면 직접 입력한 키워드가 카드에 보인다', () {
+    expect(TopicCategory.values, hasLength(24));
+    store().checkIn(
+      place: DemoSeed.places[0],
+      topic: '사진 같이 찍어요',
+      category: TopicCategory.other,
+      categoryCustom: ' 사진 ',
+    );
+    final card = db().myCheckins(DateTime.now()).single;
+    expect(card.keywordLabel, '사진');
+
+    // 기타가 아닌 키워드로 바꾸면 직접 입력값은 지워진다
+    store().updateTopic(
+      card.id,
+      '사진 같이 찍어요',
+      TopicCategory.culture,
+      categoryCustom: '사진',
+    );
+    final updated = db().myCheckins(DateTime.now()).single;
+    expect(updated.categoryCustom, isNull);
+    expect(updated.keywordLabel, '전시·공연');
+  });
 }

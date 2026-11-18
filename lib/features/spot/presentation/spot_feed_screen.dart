@@ -257,7 +257,7 @@ class TopicCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      c.category.label,
+                      c.keywordLabel,
                       style: AppTypography.caption.copyWith(
                         color: AppColors.secondary,
                       ),

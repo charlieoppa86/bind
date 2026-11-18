@@ -15,6 +15,7 @@ class Checkin {
     this.jobCustom,
     required this.topic,
     required this.category,
+    this.categoryCustom,
     required this.startedAt,
     this.checkedOutAt,
     this.hasTrustBadge = false,
@@ -34,6 +35,7 @@ class Checkin {
       map['category'],
       TopicCategory.other,
     ),
+    categoryCustom: map['categoryCustom'] as String?,
     startedAt: toDateTime(map['startedAt']) ?? DateTime.now(),
     checkedOutAt: toDateTime(map['checkedOutAt']),
     hasTrustBadge: map['hasTrustBadge'] as bool? ?? false,
@@ -51,6 +53,12 @@ class Checkin {
   String get jobLabel => jobLabelOf(jobTag, jobCustom);
   final String topic;
   final TopicCategory category;
+
+  /// 키워드로 "기타"를 고르고 직접 입력한 글자
+  final String? categoryCustom;
+
+  /// 카드에 보이는 키워드. 기타를 고르고 직접 입력했으면 그 글자.
+  String get keywordLabel => keywordLabelOf(category, categoryCustom);
   final DateTime startedAt;
   final DateTime? checkedOutAt;
   final bool hasTrustBadge;
@@ -71,6 +79,7 @@ class Checkin {
     jobCustom: jobCustom,
     topic: topic,
     category: category,
+    categoryCustom: categoryCustom,
     startedAt: startedAt,
     checkedOutAt: checkedOutAt,
     hasTrustBadge: hasTrustBadge,
@@ -80,6 +89,7 @@ class Checkin {
   Checkin copyWith({
     String? topic,
     TopicCategory? category,
+    String? Function()? categoryCustom,
     DateTime? checkedOutAt,
     bool? notifyWhenSomeoneArrives,
   }) => Checkin(
@@ -91,6 +101,9 @@ class Checkin {
     jobCustom: jobCustom,
     topic: topic ?? this.topic,
     category: category ?? this.category,
+    categoryCustom: categoryCustom != null
+        ? categoryCustom()
+        : this.categoryCustom,
     startedAt: startedAt,
     checkedOutAt: checkedOutAt ?? this.checkedOutAt,
     hasTrustBadge: hasTrustBadge,
@@ -106,6 +119,7 @@ class Checkin {
     'jobCustom': jobCustom,
     'topic': topic,
     'category': category.name,
+    'categoryCustom': categoryCustom,
     'startedAt': toTimestamp(startedAt),
     'checkedOutAt': toTimestamp(checkedOutAt),
     'notifyWhenSomeoneArrives': notifyWhenSomeoneArrives,

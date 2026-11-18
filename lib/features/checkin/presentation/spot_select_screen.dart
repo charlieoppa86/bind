@@ -16,6 +16,7 @@ import '../../../data/demo/demo_store.dart';
 import '../../../data/models/place.dart';
 import '../../../data/models/spot.dart';
 import '../../../data/place/place_search.dart';
+import 'keyword_picker.dart';
 import '../../../core/widgets/bind_logo.dart';
 
 /// 체크인 (US-004, US-005). 체크인 전 홈.
@@ -38,9 +39,13 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
   final _topic = TextEditingController();
   final _place = ValueNotifier<Place?>(null);
   final _category = ValueNotifier<TopicCategory?>(null);
+  final _keywordCustom = TextEditingController();
+  final _keywordCustomFocus = FocusNode();
 
   @override
   void dispose() {
+    _keywordCustom.dispose();
+    _keywordCustomFocus.dispose();
     _query.dispose();
     _queryFocus.dispose();
     _topic.dispose();
@@ -61,18 +66,12 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
     _queryFocus.requestFocus();
   }
 
-  Future<void> _openExamples() async {
-    final picked = await context.push<String>(
-      Routes.topicExamples(_category.value!.name),
-    );
-    if (picked == null) return;
-    _topic.text = picked;
-  }
-
   bool get _valid =>
       _place.value != null &&
+      _topic.text.trim().isNotEmpty &&
       _category.value != null &&
-      _topic.text.trim().isNotEmpty;
+      (_category.value != TopicCategory.other ||
+          _keywordCustom.text.trim().isNotEmpty);
 
   void _submit() {
     HapticFeedback.mediumImpact();
@@ -82,6 +81,7 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
           place: _place.value!,
           topic: _topic.text,
           category: _category.value!,
+          categoryCustom: _keywordCustom.text,
         );
     context.go(Routes.spot);
   }
@@ -133,24 +133,7 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
                 const SizedBox(height: AppSpacing.xl),
 
                 // ── 주제 ──
-                const _Label('어떤 얘기를 하고 싶으세요?'),
-                ValueListenableBuilder<TopicCategory?>(
-                  valueListenable: _category,
-                  builder: (_, selected, _) => Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: [
-                      for (final c in TopicCategory.values)
-                        SelectChip(
-                          label: c.label,
-                          compact: true,
-                          selected: selected == c,
-                          onTap: () => _category.value = c,
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
+                const _Label('주제'),
                 ValueListenableBuilder<TopicCategory?>(
                   valueListenable: _category,
                   builder: (_, category, _) => TextField(
@@ -161,21 +144,22 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                     decoration: InputDecoration(
-                      hintText: category == null
-                          ? '주제 한 줄'
-                          : '예) ${topicExamples[category]!.first}',
+                      hintText:
+                          '예) ${topicExamples[category ?? TopicCategory.smallTalk]!.first}',
                     ),
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: ValueListenableBuilder<TopicCategory?>(
-                    valueListenable: _category,
-                    builder: (_, category, _) => TextButton.icon(
-                      onPressed: category == null ? null : _openExamples,
-                      icon: const Icon(Icons.lightbulb_outline, size: 16),
-                      label: const Text('예시 주제 보기'),
-                    ),
+                const SizedBox(height: AppSpacing.md),
+
+                // ── 키워드 ──
+                const _Label('키워드'),
+                ValueListenableBuilder<TopicCategory?>(
+                  valueListenable: _category,
+                  builder: (_, selected, _) => KeywordPicker(
+                    selected: selected,
+                    onSelected: (c) => _category.value = c,
+                    customController: _keywordCustom,
+                    customFocus: _keywordCustomFocus,
                   ),
                 ),
               ],
@@ -183,7 +167,12 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
           ),
           BottomCta(
             child: ListenableBuilder(
-              listenable: Listenable.merge([_place, _topic, _category]),
+              listenable: Listenable.merge([
+                _place,
+                _topic,
+                _category,
+                _keywordCustom,
+              ]),
               builder: (_, _) => FilledButton(
                 onPressed: _valid ? _submit : null,
                 child: const Text('체크인하기'),

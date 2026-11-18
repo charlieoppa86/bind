@@ -94,7 +94,12 @@ service cloud.firestore {
     function validTopic(data) {
       return data.topic is string
         && data.topic.size() >= 1 && data.topic.size() <= 30   // AppLimits.topicMaxLength
-        && data.category is string;
+        && data.category is string
+        // 키워드 "기타" 직접 입력(AppLimits.keywordCustomMax)
+        && (data.get('categoryCustom', null) == null
+            || (data.categoryCustom is string
+                && data.categoryCustom.size() >= 1
+                && data.categoryCustom.size() <= 10));
     }
 
     // spots/{카카오 장소 ID} — 처음 체크인하는 사람이 만든다. 인원(activeCount)은 Functions만 쓴다.
@@ -118,7 +123,7 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['uid', 'spotId', 'nickname',
-             'jobTag', 'jobCustom', 'topic', 'category', 'startedAt',
+             'jobTag', 'jobCustom', 'topic', 'category', 'categoryCustom', 'startedAt',
              'checkedOutAt', 'hasTrustBadge', 'notifyWhenSomeoneArrives'])
         && request.resource.data.uid == request.auth.uid
         // 같은 트랜잭션에서 장소를 만들 수 있어 existsAfter로 본다.
@@ -138,7 +143,7 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid
         && resource.data.checkedOutAt == null   // 내린 카드는 바꾸지 못한다
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['topic', 'category', 'checkedOutAt',
+             .hasOnly(['topic', 'category', 'categoryCustom', 'checkedOutAt',
                        'notifyWhenSomeoneArrives', 'nickname', 'jobTag', 'jobCustom'])
         && validTopic(request.resource.data)
         && (request.resource.data.checkedOutAt == null

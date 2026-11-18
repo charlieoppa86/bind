@@ -66,6 +66,7 @@ class CheckinRepository {
     required Place place,
     required String topic,
     required TopicCategory category,
+    String? categoryCustom,
   }) async {
     final spotRef = _spots.doc(place.id);
     await _db.runTransaction((tx) async {
@@ -82,7 +83,10 @@ class CheckinRepository {
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
-      tx.set(_checkins.doc(), _newCard(uid, me, place.id, topic, category));
+      tx.set(
+        _checkins.doc(),
+        _newCard(uid, me, place.id, topic, category, categoryCustom),
+      );
     });
   }
 
@@ -93,16 +97,26 @@ class CheckinRepository {
     required String spotId,
     required String topic,
     required TopicCategory category,
-  }) => _checkins.add(_newCard(uid, me, spotId, topic, category));
+    String? categoryCustom,
+  }) =>
+      _checkins.add(_newCard(uid, me, spotId, topic, category, categoryCustom));
 
   Future<void> updateTopic(
     String checkinId,
     String topic,
-    TopicCategory category,
-  ) => _checkins.doc(checkinId).update({
+    TopicCategory category, {
+    String? categoryCustom,
+  }) => _checkins.doc(checkinId).update({
     'topic': topic,
     'category': category.name,
+    'categoryCustom': _customFor(category, categoryCustom),
   });
+
+  /// 기타일 때만 직접 입력한 키워드를 저장한다.
+  static String? _customFor(TopicCategory category, String? custom) =>
+      category == TopicCategory.other && (custom?.trim().isNotEmpty ?? false)
+      ? custom!.trim()
+      : null;
 
   /// 카드 하나 내리기
   Future<void> checkOutOne(String checkinId) =>
@@ -150,6 +164,7 @@ class CheckinRepository {
     String spotId,
     String topic,
     TopicCategory category,
+    String? categoryCustom,
   ) => {
     'uid': uid,
     'spotId': spotId,
@@ -158,6 +173,7 @@ class CheckinRepository {
     'jobCustom': me.jobCustom,
     'topic': topic,
     'category': category.name,
+    'categoryCustom': _customFor(category, categoryCustom),
     'startedAt': FieldValue.serverTimestamp(),
     'checkedOutAt': null,
     'hasTrustBadge': me.hasTrustBadge,

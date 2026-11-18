@@ -145,7 +145,7 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
                           ],
                         ],
                       ),
-                      Text(target.category.label, style: AppTypography.caption),
+                      Text(target.keywordLabel, style: AppTypography.caption),
                     ],
                   ),
                 ),

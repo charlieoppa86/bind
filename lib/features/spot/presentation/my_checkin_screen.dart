@@ -114,7 +114,7 @@ class MyCheckinScreen extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${c.nickname} · ${c.jobLabel} · ${c.category.label}',
+                                  '${c.nickname} · ${c.jobLabel} · ${c.keywordLabel}',
                                   style: AppTypography.caption,
                                 ),
                                 const SizedBox(height: 4),

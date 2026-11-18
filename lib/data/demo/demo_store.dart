@@ -600,7 +600,9 @@ class DemoStore extends Notifier<DemoDb> {
     required Place place,
     required String topic,
     required TopicCategory category,
+    String? categoryCustom,
   }) {
+    final custom = _customFor(category, categoryCustom);
     final me = _db.me!;
     final now = _now;
     final spot = _db.spotByPlaceId(place.id) ?? _openSpot(place, now);
@@ -613,6 +615,7 @@ class DemoStore extends Notifier<DemoDb> {
       jobCustom: me.jobCustom,
       topic: topic.trim(),
       category: category,
+      categoryCustom: custom,
       startedAt: now,
       hasTrustBadge: me.hasTrustBadge,
     );
@@ -634,6 +637,7 @@ class DemoStore extends Notifier<DemoDb> {
           place: place,
           topic: topic.trim(),
           category: category,
+          categoryCustom: custom,
         ),
         onFail: () => _checkOutLocal(checkin.id),
       );
@@ -666,7 +670,12 @@ class DemoStore extends Notifier<DemoDb> {
     return spot;
   }
 
-  void addTopic(String topic, TopicCategory category) {
+  void addTopic(
+    String topic,
+    TopicCategory category, {
+    String? categoryCustom,
+  }) {
+    final custom = _customFor(category, categoryCustom);
     final first = _db.myCheckins(_now).first;
     final me = _db.me!;
     _db.checkins.add(
@@ -679,6 +688,7 @@ class DemoStore extends Notifier<DemoDb> {
         jobCustom: me.jobCustom,
         topic: topic.trim(),
         category: category,
+        categoryCustom: custom,
         startedAt: _now,
         hasTrustBadge: me.hasTrustBadge,
       ),
@@ -692,20 +702,35 @@ class DemoStore extends Notifier<DemoDb> {
         spotId: first.spotId,
         topic: topic.trim(),
         category: category,
+        categoryCustom: custom,
       ),
     );
   }
 
-  void updateTopic(String checkinId, String topic, TopicCategory category) {
+  void updateTopic(
+    String checkinId,
+    String topic,
+    TopicCategory category, {
+    String? categoryCustom,
+  }) {
     final i = _db.checkins.indexWhere((c) => c.id == checkinId);
     if (i < 0) return;
+    final custom = _customFor(category, categoryCustom);
     _db.checkins[i] = _db.checkins[i].copyWith(
       topic: topic.trim(),
       category: category,
+      categoryCustom: () => custom,
     );
     _rememberTopic(topic.trim(), category);
     _commit({DemoPart.checkins, DemoPart.topics});
-    _remote((repo, _) => repo.updateTopic(checkinId, topic.trim(), category));
+    _remote(
+      (repo, _) => repo.updateTopic(
+        checkinId,
+        topic.trim(),
+        category,
+        categoryCustom: custom,
+      ),
+    );
   }
 
   void removeTopic(String checkinId) {
@@ -715,6 +740,12 @@ class DemoStore extends Notifier<DemoDb> {
     _commit({DemoPart.checkins});
     _remote((repo, _) => repo.checkOutOne(checkinId));
   }
+
+  /// 기타일 때만 직접 입력한 키워드를 남긴다.
+  static String? _customFor(TopicCategory category, String? custom) =>
+      category == TopicCategory.other && (custom?.trim().isNotEmpty ?? false)
+      ? custom!.trim()
+      : null;
 
   void _rememberTopic(String topic, TopicCategory category) {
     _db.recentTopics

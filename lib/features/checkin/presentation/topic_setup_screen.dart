@@ -12,6 +12,7 @@ import '../../../core/constants/topic_content.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
+import 'keyword_picker.dart';
 
 /// 체크인 > 주제 수정·추가 (US-005, US-014, US-016)
 ///
@@ -30,6 +31,8 @@ class TopicSetupScreen extends ConsumerStatefulWidget {
 
 class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
   final _topic = TextEditingController();
+  final _keywordCustom = TextEditingController();
+  final _keywordCustomFocus = FocusNode();
   TopicCategory? _category;
 
   @override
@@ -41,20 +44,27 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
     if (editing != null) {
       _topic.text = editing.topic;
       _category = editing.category;
+      _keywordCustom.text = editing.categoryCustom ?? '';
     }
   }
 
   @override
   void dispose() {
     _topic.dispose();
+    _keywordCustom.dispose();
+    _keywordCustomFocus.dispose();
     super.dispose();
   }
 
-  bool get _valid => _topic.text.trim().isNotEmpty && _category != null;
+  bool get _valid =>
+      _topic.text.trim().isNotEmpty &&
+      _category != null &&
+      (_category != TopicCategory.other ||
+          _keywordCustom.text.trim().isNotEmpty);
 
   Future<void> _openExamples() async {
     final picked = await context.push<String>(
-      Routes.topicExamples(_category!.name),
+      Routes.topicExamples((_category ?? TopicCategory.smallTalk).name),
     );
     if (picked == null) return;
     setState(() {
@@ -67,11 +77,16 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
     final store = ref.read(demoStoreProvider.notifier);
     final topic = _topic.text.trim();
     if (widget.editId != null) {
-      store.updateTopic(widget.editId!, topic, _category!);
+      store.updateTopic(
+        widget.editId!,
+        topic,
+        _category!,
+        categoryCustom: _keywordCustom.text,
+      );
       context.pop();
       _snack('주제를 바꿨어요');
     } else {
-      store.addTopic(topic, _category!);
+      store.addTopic(topic, _category!, categoryCustom: _keywordCustom.text);
       context.pop();
       _snack('주제를 추가했어요');
     }
@@ -115,26 +130,12 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
                       : MetaLabel(spotName, icon: Icons.place_outlined),
                   title: '$title할 내용을\n적어 주세요',
                 ),
-                const _Label('카테고리'),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: [
-                    for (final c in TopicCategory.values)
-                      SelectChip(
-                        label: c.label,
-                        selected: _category == c,
-                        onTap: () => setState(() => _category = c),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xl),
-
+                // ── 주제 ──
                 Row(
                   children: [
-                    const Expanded(child: _Label('주제 한 줄')),
+                    const Expanded(child: _Label('주제')),
                     TextButton.icon(
-                      onPressed: _category == null ? null : _openExamples,
+                      onPressed: _openExamples,
                       icon: const Icon(Icons.lightbulb_outline, size: 16),
                       label: const Text('예시 보기'),
                     ),
@@ -149,10 +150,19 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                   decoration: InputDecoration(
-                    hintText: _category == null
-                        ? '카테고리를 고르면 예시도 볼 수 있어요'
-                        : '예) ${topicExamples[_category!]!.first}',
+                    hintText:
+                        '예) ${topicExamples[_category ?? TopicCategory.smallTalk]!.first}',
                   ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── 키워드 ──
+                const _Label('키워드'),
+                KeywordPicker(
+                  selected: _category,
+                  onSelected: (c) => setState(() => _category = c),
+                  customController: _keywordCustom,
+                  customFocus: _keywordCustomFocus,
                 ),
 
                 if (recentTopics.isNotEmpty) ...[
@@ -182,9 +192,9 @@ class _TopicSetupScreenState extends ConsumerState<TopicSetupScreen> {
           ),
           BottomCta(
             // 글자를 칠 때는 이 버튼만 다시 그린다.
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _topic,
-              builder: (_, _, _) => FilledButton(
+            child: ListenableBuilder(
+              listenable: Listenable.merge([_topic, _keywordCustom]),
+              builder: (_, _) => FilledButton(
                 onPressed: _valid ? _submit : null,
                 child: Text(widget.editId != null ? '저장' : '주제 추가'),
               ),

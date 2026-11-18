@@ -8,6 +8,9 @@ abstract final class AppLimits {
   /// 하는 일을 기타로 고르고 직접 입력할 때 글자 수
   static const jobCustomMax = 10;
 
+  /// 키워드 "기타" 직접 입력 최대 글자 수
+  static const keywordCustomMax = 10;
+
   // US-005 주제 한 줄
   static const topicMaxLength = 30;
 

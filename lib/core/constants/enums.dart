@@ -68,23 +68,61 @@ String jobLabelOf(JobTag tag, String? custom) =>
     ? custom!.trim()
     : tag.label;
 
-/// 주제 카테고리 (US-005). 단일 선택.
-///
-/// 연애·만남 카테고리는 영구 제외(US-W08). 절대 추가하지 않는다.
-/// NOTE: 문서에 카테고리 목록이 확정돼 있지 않아 초안으로 둔 값이다.
-enum TopicCategory {
-  dev('개발'),
-  design('디자인'),
-  marketing('마케팅'),
-  startup('창업'),
-  career('커리어·이직'),
-  study('스터디'),
-  culture('문화·취미'),
-  other('기타');
+/// 키워드 묶음(체크인 화면에서 그룹별로 보여 준다)
+enum KeywordGroup {
+  work('일·커리어'),
+  learning('배움'),
+  daily('일상'),
+  hobby('취미·문화'),
+  other('');
 
-  const TopicCategory(this.label);
+  const KeywordGroup(this.label);
   final String label;
 }
+
+/// 주제 키워드 (US-005). 단일 선택, 24개. "기타"를 고르면 직접 입력한다(Checkin.categoryCustom).
+/// 이름(name)은 Firestore에 저장되므로 바꾸지 않는다. 순서·라벨은 바꿔도 된다.
+enum TopicCategory {
+  // 일·커리어
+  dev('개발', KeywordGroup.work),
+  design('디자인', KeywordGroup.work),
+  marketing('마케팅', KeywordGroup.work),
+  planning('기획·PM', KeywordGroup.work),
+  dataAi('데이터·AI', KeywordGroup.work),
+  startup('창업', KeywordGroup.work),
+  career('커리어·이직', KeywordGroup.work),
+  sideJob('부업·N잡', KeywordGroup.work),
+  // 배움
+  study('스터디', KeywordGroup.learning),
+  language('외국어', KeywordGroup.learning),
+  reading('독서', KeywordGroup.learning),
+  certificate('자격증·시험', KeywordGroup.learning),
+  finance('재테크·투자', KeywordGroup.learning),
+  // 일상
+  smallTalk('스몰톡', KeywordGroup.daily),
+  worry('고민 상담', KeywordGroup.daily),
+  food('맛집·카페', KeywordGroup.daily),
+  travel('여행', KeywordGroup.daily),
+  fitness('운동·건강', KeywordGroup.daily),
+  family('육아·가족', KeywordGroup.daily),
+  // 취미·문화
+  culture('전시·공연', KeywordGroup.hobby),
+  movie('영화·드라마', KeywordGroup.hobby),
+  music('음악', KeywordGroup.hobby),
+  game('게임', KeywordGroup.hobby),
+  // 기타 → 직접 입력
+  other('기타', KeywordGroup.other);
+
+  const TopicCategory(this.label, this.group);
+  final String label;
+  final KeywordGroup group;
+}
+
+/// 카드에 보이는 키워드. 기타를 고르고 직접 입력했으면 그 글자.
+String keywordLabelOf(TopicCategory category, String? custom) =>
+    category == TopicCategory.other && (custom?.trim().isNotEmpty ?? false)
+    ? custom!.trim()
+    : category.label;
 
 /// 신고 사유 (US-010).
 enum ReportReason {
