@@ -2,13 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- 푸시 알림(APNs). 출시 빌드는 Xcode가 production으로 바꿔 서명한다. -->
 	<key>aps-environment</key>
 	<string>development</string>
-	<!-- Apple 로그인(App Store 규정: Google 로그인이 있으면 함께 제공) -->
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>
 	</array>
+	<key>com.apple.developer.devicecheck.appattest-environment</key>
+	<string>development</string>
 </dict>
 </plist>
