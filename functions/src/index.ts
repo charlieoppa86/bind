@@ -11,8 +11,9 @@
  * onCheckinWritten: 체크인이 생기거나 내려가면 그 장소의 지금 인원(activeCount)을 다시 센다.
  * onRequestWritten / (onMessageCreated·onCheckinWritten 안) : 푸시 알림(개별 토큰 발송)
  * sendTopicPush: 운영자 토픽 발송(관리자 권한), sendTestPush: 내 기기로 테스트 발송
- * deleteAccount: 탈퇴. 닉네임 예약을 풀고 프로필을 "떠난 사용자"로 표시한 뒤
- *   Auth 계정을 지운다(클라이언트 규칙으로는 못 하는 일).
+ * deleteAccount: 탈퇴. 닉네임 예약을 풀고 프로필·카드·요청·차단·푸시 토큰을 지운 뒤
+ *   "떠난 사용자" 표시만 남기고 Auth 계정을 지운다(클라이언트 규칙으로는 못 하는 일).
+ * 보관 기간(TTL, firestore.indexes.json): 대화방·메시지·평가 7일, 신고 1년.
  *
  *   firebase functions:secrets:set KAKAO_REST_API_KEY
  *   firebase deploy --only functions
@@ -138,25 +139,38 @@ export const deleteAccount = onCall(async (request) => {
       if (nick.get("uid") === uid) tx.delete(nickRef);
     }
     if (user.exists) {
-      // 대화 상대에게 "떠난 사용자"로 보이도록 문서는 남기고 표시만 한다(US-012).
-      tx.update(userRef, { deleted: true, jobCustom: null });
+      // 프로필(닉네임·하는 일·동의 시각 등)은 모두 지우고, 대화 상대에게
+      // "떠난 사용자"로 보이게 하는 표시만 남긴다(US-012, 개인정보처리방침 "탈퇴 시 파기").
+      tx.set(userRef, { deleted: true, deletedAt: FieldValue.serverTimestamp() });
     }
   });
+
+  // 문서가 많을 수 있어 배치(500건 제한) 대신 BulkWriter로 쓴다.
+  const writer = db.bulkWriter();
   // 열려 있던 대화방에는 떠났다고 표시한다(상대 입력창이 닫힌다).
+  // 대화방·메시지·평가는 7일 보관 기간이 끝나면 TTL로 지워진다.
   const chats = await db.collection("chats").where("memberUids", "array-contains", uid).get();
-  const batch = db.batch();
-  chats.docs.forEach((d) => batch.update(d.ref, { leftUids: FieldValue.arrayUnion(uid) }));
-  // 푸시 토큰을 지운다(탈퇴한 사람에게 알림이 가지 않게).
-  const tokens = await userRef.collection("fcmTokens").get();
-  tokens.docs.forEach((d) => batch.delete(d.ref));
-  // 체크인 카드도 내린다(장소 인원은 onCheckinWritten이 다시 센다).
-  const cards = await db
-    .collection("checkins")
-    .where("uid", "==", uid)
-    .where("checkedOutAt", "==", null)
-    .get();
-  cards.docs.forEach((d) => batch.update(d.ref, { checkedOutAt: FieldValue.serverTimestamp() }));
-  await batch.commit();
+  chats.docs.forEach((d) => writer.update(d.ref, { leftUids: FieldValue.arrayUnion(uid) }));
+  // 푸시 토큰·차단 목록을 지운다.
+  for (const sub of ["fcmTokens", "blocks"]) {
+    (await userRef.collection(sub).get()).docs.forEach((d) => writer.delete(d.ref));
+  }
+  // 체크인 카드(지난 카드 포함)를 지운다. 장소 인원은 onCheckinWritten이 다시 센다.
+  (await db.collection("checkins").where("uid", "==", uid).get()).docs.forEach((d) =>
+    writer.delete(d.ref),
+  );
+  // 보내고 받은 대화 요청(닉네임·한 마디가 담김)을 지운다.
+  for (const field of ["fromUid", "toUid"]) {
+    (await db.collection("chatRequests").where(field, "==", uid).get()).docs.forEach((d) =>
+      writer.delete(d.ref),
+    );
+  }
+  // 처음 만든 장소에 남은 내 uid를 지운다(장소 자체는 다른 사람도 쓰므로 남긴다).
+  (await db.collection("spots").where("creatorUid", "==", uid).get()).docs.forEach((d) =>
+    writer.update(d.ref, { creatorUid: null }),
+  );
+  await writer.close();
+  // 신고 기록(reports)은 분쟁 대응·부정 이용 방지를 위해 접수 1년 뒤 TTL로 지워질 때까지 남긴다.
   await getAuth().deleteUser(uid);
   return { ok: true };
 });
@@ -372,6 +386,8 @@ const REQUEST_MESSAGE_MAX = 40;
 const REQUEST_EXPIRY_MS = 30 * 60 * 1000;
 const FREE_DAILY_REQUESTS = 5;
 const CHAT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+/** 신고 기록 보관 기간(개인정보처리방침): 접수 1년 뒤 TTL로 삭제 */
+const REPORT_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
 
 /** 한국 시간 기준 오늘 0시 */
 function startOfTodayKst(now: Date): Date {
@@ -613,6 +629,10 @@ export const onReportCreated = onDocumentCreated("reports/{reportId}", async (ev
   const targetUid = event.data?.get("targetUid") as string | undefined;
   if (!targetUid) return;
   const db = getFirestore();
+  // 보관 기간이 끝나면 TTL로 지워지게 한다(클라이언트는 이 필드를 쓸 수 없다).
+  await event.data?.ref.update({
+    expiresAt: Timestamp.fromMillis(Date.now() + REPORT_RETENTION_MS),
+  });
   // 문서 id가 신고자_대상이라 문서 수 = 서로 다른 신고자 수
   const count = await db
     .collection("reports")
@@ -636,9 +656,16 @@ export const onReportCreated = onDocumentCreated("reports/{reportId}", async (ev
 export const onReviewCreated = onDocumentCreated(
   "chats/{chatId}/reviews/{reviewerUid}",
   async (event) => {
+    const db = getFirestore();
+    // 평가도 대화방과 함께 7일 뒤 TTL로 지워지게 방의 만료 시각을 붙인다.
+    // (TTL은 상위 문서가 지워져도 하위 컬렉션을 지우지 않는다)
+    const chat = await db.collection("chats").doc(event.params.chatId).get();
+    const chatExpiresAt = chat.get("expiresAt") as Timestamp | undefined;
+    await event.data?.ref.update({
+      expiresAt: chatExpiresAt ?? Timestamp.fromMillis(Date.now() + CHAT_RETENTION_MS),
+    });
     if (event.data?.get("rating") !== "good") return;
     const targetUid = event.data?.get("targetUid") as string;
-    const db = getFirestore();
     const userRef = db.collection("users").doc(targetUid);
     const after = await db.runTransaction(async (tx) => {
       const user = await tx.get(userRef);
