@@ -13,6 +13,8 @@
  * sendTopicPush: 운영자 토픽 발송(관리자 권한), sendTestPush: 내 기기로 테스트 발송
  * deleteAccount: 탈퇴. 닉네임 예약을 풀고 프로필·카드·요청·차단·푸시 토큰을 지운 뒤
  *   "떠난 사용자" 표시만 남기고 Auth 계정을 지운다(클라이언트 규칙으로는 못 하는 일).
+ * aggregateDailyMetrics: 매일 0시 30분(KST) 전날 지표(성사 대화·요청·체크인·장소 동시 인원·
+ *   7일 재체크인·신고)를 metrics/{YYYY-MM-DD}에 숫자로 저장한다. 성사 시각은 onMessageCreated가 남긴다.
  * 보관 기간(TTL, firestore.indexes.json): 대화방·메시지·평가 7일, 신고 1년.
  *
  *   firebase functions:secrets:set KAKAO_REST_API_KEY
@@ -386,6 +388,8 @@ const REQUEST_MESSAGE_MAX = 40;
 const REQUEST_EXPIRY_MS = 30 * 60 * 1000;
 const FREE_DAILY_REQUESTS = 5;
 const CHAT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+/** 성사 대화 기준: 양쪽이 각각 이 수 이상 메시지를 보낸 대화방(BIND_blueprint 7장 NSM) */
+const SUCCESS_MESSAGES = 3;
 /** 신고 기록 보관 기간(개인정보처리방침): 접수 1년 뒤 TTL로 삭제 */
 const REPORT_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -584,6 +588,16 @@ export const onMessageCreated = onDocumentCreated(
         [`messageCounts.${sender}`]: FieldValue.increment(1),
       };
       for (const o of others) update[`unread.${o}`] = FieldValue.increment(1);
+      // 성사 대화(NSM): 양쪽이 각각 SUCCESS_MESSAGES개 이상 보낸 첫 순간을 남긴다.
+      // 대화방은 7일 뒤 지워지므로, 매일 집계(aggregateDailyMetrics)가 이 시각으로 센다.
+      if (!chat.succeededAt) {
+        const counts = { ...((chat.messageCounts as Record<string, number>) ?? {}) };
+        counts[sender] = (counts[sender] ?? 0) + 1;
+        const members = chat.memberUids as string[];
+        if (members.every((u) => (counts[u] ?? 0) >= SUCCESS_MESSAGES)) {
+          update.succeededAt = FieldValue.serverTimestamp();
+        }
+      }
       tx.update(chatRef, update);
     });
 
@@ -720,3 +734,182 @@ async function notifyArrival(
     }),
   );
 }
+
+// ── 3. 지표 집계 ──────────────────────────────────────
+//
+// 매일 0시 30분(KST)에 전날 지표를 metrics/{YYYY-MM-DD}에 저장한다(숫자만, 개인 식별 정보 없음).
+// 대화방·메시지는 7일 뒤 TTL로 지워지므로 그 전에 세어 둔다. 클라이언트는 읽을 수 없다(firestore.rules).
+// 지표 정의: BIND_blueprint 7장(NSM·보조 1~3·가드레일).
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const KST_MS = 9 * 60 * 60 * 1000;
+
+/** 시각 → KST 날짜 문자열(YYYY-MM-DD) */
+function kstDay(ms: number): string {
+  return new Date(ms + KST_MS).toISOString().slice(0, 10);
+}
+
+/** KST 날짜 문자열 → 그날 0시(ms) */
+function kstDayStartMs(day: string): number {
+  return Date.parse(`${day}T00:00:00+09:00`);
+}
+
+function median(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function ratio(n: number, d: number): number | null {
+  return d === 0 ? null : Math.round((n / d) * 1000) / 1000;
+}
+
+function millisOf(v: unknown): number | null {
+  return v instanceof Timestamp ? v.toMillis() : null;
+}
+
+/** 사람별 체크인 시작 시각 목록(오름차순). 지난 카드도 남아 있어 첫 체크인을 알 수 있다. */
+async function checkinTimesOf(uids: Iterable<string>): Promise<Map<string, number[]>> {
+  const db = getFirestore();
+  const out = new Map<string, number[]>();
+  await Promise.all(
+    [...uids].map(async (uid) => {
+      const snap = await db.collection("checkins").where("uid", "==", uid).select("startedAt").get();
+      const times = snap.docs
+        .map((d) => millisOf(d.get("startedAt")))
+        .filter((t): t is number => t !== null)
+        .sort((a, b) => a - b);
+      out.set(uid, times);
+    }),
+  );
+  return out;
+}
+
+/** 장소별로 그날 가장 많이 겹친 체크인 인원(같은 사람의 카드 여러 장은 1명) */
+function spotPeaks(
+  cards: { uid: string; spotId: string; start: number; end: number }[],
+): number[] {
+  const bySpot = new Map<string, typeof cards>();
+  for (const c of cards) bySpot.set(c.spotId, [...(bySpot.get(c.spotId) ?? []), c]);
+  const peaks: number[] = [];
+  for (const list of bySpot.values()) {
+    const events = list.flatMap((c) => [
+      { t: c.start, d: 1, uid: c.uid },
+      { t: c.end, d: -1, uid: c.uid },
+    ]);
+    // 같은 시각이면 나간 사람을 먼저 뺀다.
+    events.sort((a, b) => a.t - b.t || a.d - b.d);
+    const open = new Map<string, number>();
+    let peak = 0;
+    for (const e of events) {
+      const n = (open.get(e.uid) ?? 0) + e.d;
+      if (n <= 0) open.delete(e.uid);
+      else open.set(e.uid, n);
+      peak = Math.max(peak, open.size);
+    }
+    peaks.push(peak);
+  }
+  return peaks;
+}
+
+/** [day]의 지표를 계산해 metrics/{day}에 저장한다. */
+async function computeDailyMetrics(day: string): Promise<Record<string, unknown>> {
+  const db = getFirestore();
+  const start = kstDayStartMs(day);
+  const end = start + DAY_MS;
+  const inDay = (field: string, col: string) =>
+    db
+      .collection(col)
+      .where(field, ">=", Timestamp.fromMillis(start))
+      .where(field, "<", Timestamp.fromMillis(end));
+
+  // NSM: 그날 성사된 대화방(succeededAt 기준)
+  const succeeded = await inDay("succeededAt", "chats").count().get();
+
+  // 대화 요청
+  const reqs = await inDay("createdAt", "chatRequests").select("fromUid", "toUid", "status").get();
+  const accepted = reqs.docs.filter((d) => d.get("status") === "accepted");
+  const chattedUids = new Set(accepted.flatMap((d) => [d.get("fromUid"), d.get("toUid")] as string[]));
+
+  // 체크인: 그날 시작한 카드
+  const started = await inDay("startedAt", "checkins").select("uid").get();
+  const checkinUids = new Set(started.docs.map((d) => d.get("uid") as string));
+
+  // 장소 동시 인원: 그날과 겹친 카드(그날 이후 체크아웃했거나 아직 체크인 중인 카드 중 그날 끝 전에 시작한 것)
+  const [closed, open] = await Promise.all([
+    db.collection("checkins").where("checkedOutAt", ">=", Timestamp.fromMillis(start))
+      .select("uid", "spotId", "startedAt", "checkedOutAt").get(),
+    db.collection("checkins").where("checkedOutAt", "==", null)
+      .select("uid", "spotId", "startedAt").get(),
+  ]);
+  const cards = [...closed.docs, ...open.docs]
+    .map((d) => ({
+      uid: d.get("uid") as string,
+      spotId: d.get("spotId") as string,
+      start: Math.max(millisOf(d.get("startedAt")) ?? end, start),
+      end: Math.min(millisOf(d.get("checkedOutAt")) ?? end, end),
+    }))
+    .filter((c) => c.start < end && c.end > c.start);
+  const peaks = spotPeaks(cards);
+
+  // 7일 재체크인율: 7일 전에 처음 체크인한 사람 중, 그 뒤 7일 안(다른 날)에 다시 체크인한 비율
+  const cohortDay = kstDay(start - 7 * DAY_MS);
+  const cohortStart = kstDayStartMs(cohortDay);
+  const cohortCards = await db.collection("checkins")
+    .where("startedAt", ">=", Timestamp.fromMillis(cohortStart))
+    .where("startedAt", "<", Timestamp.fromMillis(cohortStart + DAY_MS))
+    .select("uid").get();
+  const times = await checkinTimesOf(
+    new Set([...checkinUids, ...cohortCards.docs.map((d) => d.get("uid") as string)]),
+  );
+  let cohort = 0;
+  let returned = 0;
+  for (const uid of new Set(cohortCards.docs.map((d) => d.get("uid") as string))) {
+    const t = times.get(uid) ?? [];
+    if (t.length === 0 || kstDay(t[0]) !== cohortDay) continue; // 첫 체크인이 그날인 사람만
+    cohort++;
+    if (t.some((x) => kstDay(x) !== cohortDay && x <= t[0] + 7 * DAY_MS)) returned++;
+  }
+  const newCheckinUsers = [...checkinUids].filter((u) => kstDay((times.get(u) ?? [0])[0]) === day).length;
+
+  // 가드레일: 신고
+  const reports = await inDay("createdAt", "reports").count().get();
+  const reportCount = reports.data().count;
+
+  const metrics = {
+    date: day,
+    computedAt: FieldValue.serverTimestamp(),
+    // NSM
+    succeededChats: succeeded.data().count,
+    // 요청
+    requests: reqs.size,
+    acceptedRequests: accepted.length,
+    acceptRate: ratio(accepted.length, reqs.size),
+    // 체크인
+    checkins: started.size,
+    checkinUsers: checkinUids.size,
+    newCheckinUsers,
+    // 보조 1: 그날 체크인한 사람 중 그날 수락된 대화가 있는 비율
+    checkinToChatRate: ratio([...checkinUids].filter((u) => chattedUids.has(u)).length, checkinUids.size),
+    // 보조 2: 장소별 그날 최대 동시 인원
+    activeSpots: peaks.length,
+    spotPeakMedian: median(peaks),
+    spotPeakMax: peaks.length ? Math.max(...peaks) : null,
+    // 보조 3: 7일 재체크인(cohortDate에 첫 체크인한 사람 기준)
+    retention7d: { cohortDate: cohortDay, cohortSize: cohort, returned, rate: ratio(returned, cohort) },
+    // 가드레일: 수락된 대화 100건당 신고
+    reports: reportCount,
+    reportsPer100Chats: accepted.length === 0 ? null : Math.round((reportCount / accepted.length) * 10000) / 100,
+  };
+  await db.collection("metrics").doc(day).set(metrics);
+  return metrics;
+}
+
+/** 매일 0시 30분(KST)에 전날 지표를 저장한다. */
+export const aggregateDailyMetrics = onSchedule(
+  { schedule: "30 0 * * *", timeZone: "Asia/Seoul" },
+  async () => {
+    await computeDailyMetrics(kstDay(Date.now() - DAY_MS));
+  },
+);

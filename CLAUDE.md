@@ -63,7 +63,7 @@ dart run flutter_launcher_icons                   # 앱 아이콘 다시 생성(
 - 파생 provider는 바뀐 데이터 묶음만 다시 그리게 쪼개 둔다(`test/fine_grained_rebuild_test.dart`가 검사).
 - **로그인·프로필**은 `AccountController`(lib/features/session/account_controller.dart) → `AccountRepository`(lib/data/account/). 실제 모드는 Google 로그인(iOS는 Apple 로그인도, `AppleSignInButton`은 iOS에서만 보임) + `users/{uid}` + 닉네임 예약 `nicknames/{key}`. Apple로 가입한 계정은 탈퇴 전 `revokeForDeletion`이 Apple 토큰을 해지한다(App Store 규정).
 - **세션**(`lib/features/session/session.dart`)은 라우터 가드의 기준(로그인·온보딩·정지·체크인)이다. 데모 저장소가 로그인·온보딩·체크인 시 세션을 갱신한다. 이 Notifier만 교체하면 라우터 가드는 그대로 동작한다.
-- **신뢰가 필요한 값은 Cloud Functions가 쓴다**(클라이언트 금지): 요청 보내기·수락(`sendRequest`/`respondRequest`, 수락 시 채팅방 생성), 만료(`expireRequests`), 장소 인원(`onCheckinWritten`), 마지막 메시지·안 읽은 수(`onMessageCreated`), 정지(`onReportCreated`), 좋았어요 수(`onReviewCreated`), 요청 푸시(`onRequestWritten`), 탈퇴(`deleteAccount`). 보안 규칙은 `firestore.rules`.
+- **신뢰가 필요한 값은 Cloud Functions가 쓴다**(클라이언트 금지): 요청 보내기·수락(`sendRequest`/`respondRequest`, 수락 시 채팅방 생성), 만료(`expireRequests`), 장소 인원(`onCheckinWritten`), 마지막 메시지·안 읽은 수·성사 시각(`onMessageCreated`), 일별 지표(`aggregateDailyMetrics` → `metrics/{YYYY-MM-DD}`, 앱은 읽기 불가), 정지(`onReportCreated`), 좋았어요 수(`onReviewCreated`), 요청 푸시(`onRequestWritten`), 탈퇴(`deleteAccount`). 보안 규칙은 `firestore.rules`.
 - **앱 안 알림**(요청 도착·수락·만료 등)은 `inAppNoticeProvider`로 보내면 화면 위 배너로 뜬다.
 - **푸시(FCM)**는 `PushController`(lib/core/push/, `pushProvider`)가 권한·토큰(`users/{uid}/fcmTokens`)·토픽·받은 알림을 관리한다. 서버는 data에 `type`·`route`를 넣어 보내고, 앱은 `PushRoute.parse`로 허용된 앱 안 경로만 연다. 알림 채널 id는 `bind_default`(앱·서버 같게). 백그라운드 핸들러는 `runApp` 전에 등록한다.
 

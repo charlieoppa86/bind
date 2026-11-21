@@ -247,6 +247,11 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    // 운영 지표(aggregateDailyMetrics). 서버만 쓰고, 앱에서는 읽을 수 없다.
+    match /metrics/{day} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
