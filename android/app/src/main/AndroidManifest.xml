@@ -5,6 +5,10 @@
     <!-- Android 13+ 알림 권한(실행 중 요청). 요청 도착·수락 알림용, 거절해도 앱 사용 가능 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 세로 고정(screenOrientation=portrait)이 자동으로 붙이는 "세로 화면 필수" 조건을 선택으로 바꾼다.
+         필수로 두면 태블릿·데스크톱·XR 등 일부 기기에서 Play 설치가 막힌다. -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+
     <!-- 광고 ID 미사용: firebase_analytics(측정 SDK)가 자동으로 넣는 광고 관련 권한을 뺀다.
          Play Console "광고 ID" 선언은 "사용 안 함"으로 한다. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
