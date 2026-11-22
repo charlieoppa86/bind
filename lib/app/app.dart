@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/notice/notice_banner.dart';
+import 'content_width_frame.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 
@@ -23,9 +24,12 @@ class BindApp extends ConsumerWidget {
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       // 요청 도착·수락·만료 등 앱 안 알림.
       // TODO(fcm): 앱이 닫혀 있을 때는 FCM 푸시 → 같은 경로로 딥링크
+      // 아이패드에서는 ContentWidthFrame이 앱 전체를 가운데 한 열로 모은다.
       builder: (context, child) => AnnotatedRegion(
         value: AppTheme.systemOverlay,
-        child: NoticeBannerHost(onOpen: router.go, child: child!),
+        child: ContentWidthFrame(
+          child: NoticeBannerHost(onOpen: router.go, child: child!),
+        ),
       ),
     );
   }

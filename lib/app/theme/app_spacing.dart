@@ -11,6 +11,10 @@ abstract final class AppSpacing {
 
   /// 큰 CTA 높이
   static const double ctaHeight = 56;
+
+  /// 앱 화면 최대 너비. 이보다 넓은 화면(아이패드)에서는 이 너비로 가운데 둔다.
+  /// 기준: iPad Air 11"(M4) 세로 820pt, iPad Pro 13"(M4) 세로 1032pt.
+  static const double maxContentWidth = 640;
 }
 
 abstract final class AppRadius {

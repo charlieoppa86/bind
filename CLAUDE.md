@@ -71,6 +71,7 @@ dart run flutter_launcher_icons                   # 앱 아이콘 다시 생성(
 - 경로 문자열은 `Routes`(lib/app/router/routes.dart)만 사용한다.
 - 30자·40자·30분·7일 같은 숫자는 `AppLimits`에서 가져온다. 화면에 숫자를 직접 쓰지 않는다. 문구는 `Brand`.
 - 색·글꼴·간격은 `AppColors` / `AppTypography` / `AppSpacing` / `AppRadius`만 사용한다. `primary`는 행동·선택에만.
+- **아이폰·아이패드 모두 지원, 세로 고정**(iPad는 `UIRequiresFullScreen`, 멀티태스킹 미지원). 레이아웃 기준 기기는 iPad Air 11"(M4, 820pt)·iPad Pro 13"(M4, 1032pt). 넓은 화면에서는 `ContentWidthFrame`(lib/app/)이 앱 전체를 `AppSpacing.maxContentWidth`(640) 가운데 열로 모으므로 화면마다 따로 너비를 제한하지 않는다. `test/app_flow_test.dart`가 폰·두 아이패드 크기로 전체 흐름을 돈다.
 - 앱은 **다크 모드 기본**이다(`AppColors` 값이 다크 팔레트). `heading`을 배경으로 쓰지 말고 띄울 면은 `elevated`를 쓴다. 자세한 값은 docs/DESIGN.md "다크 모드 기본".
 - 연애·만남 키워드는 영구 제외(US-W08). 키워드는 24개(`TopicCategory`, 이름은 Firestore에 저장되므로 바꾸지 않는다)이고 기타는 직접 입력(`Checkin.categoryCustom`).
 - **위치(GPS)·PIN·체류 시간 제한은 없다**(2026-11-16 결정). 체크인은 한 화면에서 장소를 검색해 고르고 주제 한 줄을 올리면 끝난다. 체크아웃할 때까지 카드가 보인다.
