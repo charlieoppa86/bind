@@ -288,6 +288,9 @@ abstract final class DemoSeed {
     for (final (i, (uid, spotId, topic, category, ago, _)) in _cards.indexed)
       () {
         final u = users.firstWhere((u) => u.uid == uid);
+        final group = _groupChats
+            .where((g) => g.checkinId == 'c-$i')
+            .firstOrNull;
         return Checkin(
           id: 'c-$i',
           uid: uid,
@@ -298,9 +301,46 @@ abstract final class DemoSeed {
           category: category,
           startedAt: now.subtract(Duration(minutes: ago)),
           hasTrustBadge: u.hasTrustBadge,
+          openGroupChat: group != null,
+          groupChatId: group?.id,
+          groupMemberCount: group?.members.length ?? 0,
         );
       }(),
   ];
+
+  /// 이미 열려 있는 그룹 채팅(US-025). 나는 아직 참여하지 않았다.
+  /// members의 첫 사람이 연 사람이고, 카드(checkinId)의 주제가 방 이름이다.
+  static const _groupChats =
+      <
+        ({
+          String id,
+          String checkinId,
+          List<String> members,
+          int hoursAgo,
+          List<(String, String, int)> messages,
+        })
+      >[
+        (
+          id: 'group-hana',
+          checkinId: 'c-7', // u-hana: 사이드 프로젝트 같이 고민해요
+          members: ['u-hana', 'u-taeo', 'u-junho'],
+          hoursAgo: 1,
+          messages: [
+            ('u-hana', '사이드 프로젝트 하시는 분들 편하게 얘기해요!', 50),
+            ('u-taeo', '저는 주말에 맛집 지도 앱 만들고 있어요', 45),
+            ('u-junho', '오 저는 독서 기록 서비스요 ㅎㅎ', 40),
+          ],
+        ),
+      ];
+
+  /// 내가 연 그룹 채팅에 들어오는 사람과 첫 마디: (uid, 첫 마디, 체크인 후 지연)
+  static const groupJoiners = <(String, String, Duration)>[
+    ('u-minseo', '그룹 채팅 보고 들어왔어요! 반가워요 👋', Duration(seconds: 8)),
+    ('u-doyun', '저도 같이 얘기해요. 지금 라운지 2층이에요', Duration(seconds: 20)),
+  ];
+
+  /// 내가 그룹 채팅에 들어갔을 때 연 사람의 인사
+  static const groupWelcome = '어서 오세요! 편하게 얘기 나눠요 🙂';
 
   /// 내 요청 상대가 수락할지(데모 시나리오). 없는 uid는 수락.
   static const rejectingUids = {'u-taeo', 'u-kang'};
@@ -403,7 +443,7 @@ abstract final class DemoSeed {
       ],
       0,
     ),
-    // 7일이 지나 목록에서 사라져야 하는 대화
+    // 오래된 대화도 목록에 남는다(보관 기간 제한 없음)
     ('chat-old', 'u-nari', 24 * 8, [(false, '지난주 밋업 재밌었어요', 60 * 24 * 8)], 0),
   ];
 
@@ -429,7 +469,6 @@ abstract final class DemoSeed {
           id: id,
           memberUids: [myUid, uid],
           createdAt: created,
-          expiresAt: created.add(AppLimits.chatRetention),
           lastMessage: list.last.text,
           lastMessageAt: list.last.sentAt,
           leftUids: [if (users.any((u) => u.uid == uid && u.deleted)) uid],
@@ -437,6 +476,34 @@ abstract final class DemoSeed {
       );
       messages[id] = list;
       unread[id] = unreadCount;
+    }
+    for (final g in _groupChats) {
+      final created = now.subtract(Duration(hours: g.hoursAgo));
+      final list = [
+        for (final (i, (uid, text, ago)) in g.messages.indexed)
+          ChatMessage(
+            id: '${g.id}-$i',
+            senderUid: uid,
+            text: text,
+            sentAt: now.subtract(Duration(minutes: ago)),
+          ),
+      ];
+      final card = _cards[int.parse(g.checkinId.substring(2))];
+      chats.add(
+        Chat(
+          id: g.id,
+          type: ChatType.group,
+          title: card.$3,
+          ownerUid: g.members.first,
+          checkinId: g.checkinId,
+          memberUids: g.members,
+          createdAt: created,
+          lastMessage: list.last.text,
+          lastMessageAt: list.last.sentAt,
+        ),
+      );
+      messages[g.id] = list;
+      unread[g.id] = 0;
     }
     return (chats, messages, unread);
   }

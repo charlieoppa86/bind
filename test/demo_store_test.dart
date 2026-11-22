@@ -73,9 +73,9 @@ void main() {
     );
   });
 
-  test('7일이 지난 대화는 목록에서 빠진다', () {
+  test('오래된 대화도 목록에 남는다(보관 기간 제한 없음)', () {
     final ids = db().visibleChats(DateTime.now()).map((c) => c.id);
-    expect(ids, isNot(contains('chat-old')));
+    expect(ids, contains('chat-old')); // 8일 전에 시작한 대화
     expect(ids, contains('chat-seojun'));
   });
 

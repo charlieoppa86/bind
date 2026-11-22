@@ -137,7 +137,9 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['uid', 'spotId', 'nickname',
              'jobTag', 'jobCustom', 'topic', 'category', 'categoryCustom', 'startedAt',
-             'checkedOutAt', 'hasTrustBadge', 'notifyWhenSomeoneArrives'])
+             'checkedOutAt', 'hasTrustBadge', 'notifyWhenSomeoneArrives', 'openGroupChat'])
+        // US-025 그룹 채팅도 열기. 방(groupChatId)과 인원(groupMemberCount)은 서버만 쓴다.
+        && request.resource.data.get('openGroupChat', false) is bool
         && request.resource.data.uid == request.auth.uid
         // 같은 트랜잭션에서 장소를 만들 수 있어 existsAfter로 본다.
         && existsAfter(/databases/$(database)/documents/spots/$(request.resource.data.spotId))
@@ -192,11 +194,12 @@ service cloud.firestore {
 
       allow create, delete: if false;
 
-      // 2-4. 대화 평가 — 방마다 한 번, 평가자는 서로 비공개(읽기 불가).
-      //     좋았어요 수는 Functions(onReviewCreated)가 올린다.
+      // 2-4. 대화 평가 — 1:1 방마다 한 번, 평가자는 서로 비공개(읽기 불가).
+      //     좋았어요 수는 Functions(onReviewCreated)가 올린다. 그룹 채팅은 평가하지 않는다.
       match /reviews/{reviewerUid} {
         allow read, update, delete: if false;
         allow create: if isMe(reviewerUid)
+          && chat().get('type', 'direct') == 'direct'
           && request.auth.uid in chat().memberUids
           && request.resource.data.keys().hasOnly(['targetUid', 'rating', 'createdAt'])
           && request.resource.data.targetUid in chat().memberUids
@@ -214,17 +217,16 @@ service cloud.firestore {
 
         allow create: if signedIn()
           && request.auth.uid in chat().memberUids
+          // expiresAt: 보관 기간 제한을 없애기(2026-11-23) 전 앱이 붙여 보내는 값. 받기만 하고 쓰지 않는다.
           && request.resource.data.keys().hasOnly(['senderUid', 'text', 'sentAt', 'expiresAt'])
           && request.resource.data.senderUid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1
           && request.resource.data.text.size() <= 1000   // AppLimits.chatMessageMax
           && request.resource.data.sentAt == request.time
-          // 보관 기간이 지난 방, 누가 떠난 방에는 보낼 수 없다.
-          && chat().expiresAt > request.time
-          && chat().get('leftUids', []).size() == 0
-          // TTL로 방과 함께 지워지도록 방의 만료 시각을 그대로 쓴다.
-          && request.resource.data.expiresAt == chat().expiresAt;
+          // 1:1은 상대가 떠나면 닫힌다. 그룹 채팅은 남은 사람끼리 이어간다(멤버 확인은 위에서).
+          && (chat().get('type', 'direct') == 'group'
+              || chat().get('leftUids', []).size() == 0);
 
         allow update, delete: if false;
       }

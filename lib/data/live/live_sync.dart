@@ -137,7 +137,10 @@ class LiveSync {
     id: c.id,
     memberUids: [for (final u in c.memberUids) _local(u)],
     createdAt: c.createdAt,
-    expiresAt: c.expiresAt,
+    type: c.type,
+    title: c.title,
+    ownerUid: c.ownerUid == null ? null : _local(c.ownerUid!),
+    checkinId: c.checkinId,
     lastMessage: c.lastMessage,
     lastMessageAt: c.lastMessageAt,
     messageCounts: c.messageCounts,
@@ -191,7 +194,12 @@ class LiveSync {
       '채팅방',
       (list) {
         final local = [for (final (c, n) in list) (_localChat(c), n)];
-        _fetchUsers([for (final (c, _) in local) c.otherUid(DemoDb.myUid)]);
+        // 그룹 채팅은 참여자 모두의 닉네임이 필요하다.
+        _fetchUsers([
+          for (final (c, _) in local)
+            for (final u in c.memberUids)
+              if (u != DemoDb.myUid) u,
+        ]);
         _store.applyChats(local);
       },
     );

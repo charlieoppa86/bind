@@ -6,16 +6,20 @@
  * sendRequest / respondRequest / expireRequests: 대화 요청(하루 횟수·중복·만료·채팅방 생성)은
  *   신뢰가 필요해서 서버만 쓴다.
  * onMessageCreated: 메시지가 오면 대화방의 마지막 메시지·상대 안 읽은 수·메시지 수를 갱신한다.
+ * 그룹 채팅(US-025): 체크인 카드에 openGroupChat이 켜져 있으면 onCheckinWritten이 방을 만들고
+ *   카드에 groupChatId·groupMemberCount를 적는다. joinGroupChat / leaveGroupChat이 참여·나가기를
+ *   처리한다(같은 장소 체크인·차단·최대 인원은 서버가 확인한다).
  * onReportCreated: 서로 다른 신고자 2명이 쌓이면 대상 계정을 정지하고 카드를 내린다.
  * onReviewCreated: "좋았어요"면 상대의 좋았어요 수를 올리고, 신뢰 표시 기준을 넘으면 카드에 붙인다.
  * onCheckinWritten: 체크인이 생기거나 내려가면 그 장소의 지금 인원(activeCount)을 다시 센다.
  * onRequestWritten / (onMessageCreated·onCheckinWritten 안) : 푸시 알림(개별 토큰 발송)
  * sendTopicPush: 운영자 토픽 발송(관리자 권한), sendTestPush: 내 기기로 테스트 발송
- * deleteAccount: 탈퇴. 닉네임 예약을 풀고 프로필·카드·요청·차단·푸시 토큰을 지운 뒤
+ * deleteAccount: 탈퇴. 닉네임 예약을 풀고 프로필·카드·요청·차단·푸시 토큰·보낸 메시지·남긴 평가를 지운 뒤
  *   "떠난 사용자" 표시만 남기고 Auth 계정을 지운다(클라이언트 규칙으로는 못 하는 일).
  * aggregateDailyMetrics: 매일 0시 30분(KST) 전날 지표(성사 대화·요청·체크인·장소 동시 인원·
  *   7일 재체크인·신고)를 metrics/{YYYY-MM-DD}에 숫자로 저장한다. 성사 시각은 onMessageCreated가 남긴다.
- * 보관 기간(TTL, firestore.indexes.json): 대화방·메시지·평가 7일, 신고 1년.
+ * 보관 기간(TTL, firestore.indexes.json): 신고 1년. 대화방·메시지·평가는 기간 제한 없이 남는다
+ *   (2026-11-23 결정. 예전 문서에 남은 expiresAt은 TTL이 꺼져 있어 지워지지 않는다).
  *
  *   firebase functions:secrets:set KAKAO_REST_API_KEY
  *   firebase deploy --only functions
@@ -149,10 +153,17 @@ export const deleteAccount = onCall(async (request) => {
 
   // 문서가 많을 수 있어 배치(500건 제한) 대신 BulkWriter로 쓴다.
   const writer = db.bulkWriter();
-  // 열려 있던 대화방에는 떠났다고 표시한다(상대 입력창이 닫힌다).
-  // 대화방·메시지·평가는 7일 보관 기간이 끝나면 TTL로 지워진다.
+  // 열려 있던 대화방에는 떠났다고 표시한다(1:1은 상대 입력창이 닫힌다).
+  // 대화방은 남은 사람을 위해 남기고(보관 기간 제한 없음), 내가 보낸 메시지와
+  // 내가 남긴 대화 평가는 지운다. 탈퇴한 사람은 "떠난 사용자"로 보인다.
   const chats = await db.collection("chats").where("memberUids", "array-contains", uid).get();
-  chats.docs.forEach((d) => writer.update(d.ref, { leftUids: FieldValue.arrayUnion(uid) }));
+  for (const chat of chats.docs) {
+    writer.update(chat.ref, { leftUids: FieldValue.arrayUnion(uid) });
+    (await chat.ref.collection("messages").where("senderUid", "==", uid).get()).docs.forEach(
+      (m) => writer.delete(m.ref),
+    );
+    writer.delete(chat.ref.collection("reviews").doc(uid));
+  }
   // 푸시 토큰·차단 목록을 지운다.
   for (const sub of ["fcmTokens", "blocks"]) {
     (await userRef.collection(sub).get()).docs.forEach((d) => writer.delete(d.ref));
@@ -172,6 +183,30 @@ export const deleteAccount = onCall(async (request) => {
     writer.update(d.ref, { creatorUid: null }),
   );
   await writer.close();
+  // 지운 메시지가 대화 목록 미리보기에 남지 않게 방마다 마지막 메시지를 다시 맞춘다.
+  await Promise.all(
+    chats.docs.map(async (chat) => {
+      const last = await chat.ref.collection("messages").orderBy("sentAt", "desc").limit(1).get();
+      const m = last.docs[0];
+      await chat.ref.update({
+        lastMessage: m ? (m.get("text") as string) : null,
+        lastMessageAt: m ? m.get("sentAt") : chat.get("createdAt"),
+      });
+    }),
+  );
+  // 들어가 있던 그룹 채팅(남의 카드)의 인원 수에서 빠진다.
+  await Promise.all(
+    chats.docs
+      .filter((d) => d.get("type") === "group" && d.get("checkinId"))
+      .map(async (d) => {
+        const cardRef = db.collection("checkins").doc(d.get("checkinId") as string);
+        const card = await cardRef.get();
+        if (!card.exists) return;
+        const left = new Set([...((d.get("leftUids") as string[] | undefined) ?? []), uid]);
+        const members = (d.get("memberUids") as string[]).filter((u) => !left.has(u));
+        await cardRef.update({ groupMemberCount: members.length });
+      }),
+  );
   // 신고 기록(reports)은 분쟁 대응·부정 이용 방지를 위해 접수 1년 뒤 TTL로 지워질 때까지 남긴다.
   await getAuth().deleteUser(uid);
   return { ok: true };
@@ -198,6 +233,19 @@ export const onCheckinWritten = onDocumentWritten(
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
+
+    // US-025: "그룹 채팅도 열기"를 켜고 체크인했으면 그룹 채팅방을 연다.
+    if (!before && after && after.openGroupChat === true && after.checkedOutAt == null) {
+      await openGroupChat(event.params.checkinId);
+    }
+    // 그룹 채팅 이름은 카드 주제를 따른다.
+    if (before && after && after.groupChatId && before.topic !== after.topic) {
+      await getFirestore()
+        .collection("chats")
+        .doc(after.groupChatId as string)
+        .update({ title: after.topic });
+    }
+
     // 주제 글자만 바뀐 경우처럼 인원과 상관없으면 건너뛴다.
     const sameSpot = before?.spotId === after?.spotId;
     const sameState =
@@ -215,6 +263,134 @@ export const onCheckinWritten = onDocumentWritten(
     }
   },
 );
+
+// ── 그룹 채팅(US-025) ─────────────────────────────────
+
+const GROUP_CHAT_MAX = 8; // AppLimits.groupChatMaxMembers
+
+/** 카드로 그룹 채팅방을 만들고 카드에 방 id를 적는다(트리거가 두 번 돌아도 한 번만). */
+async function openGroupChat(checkinId: string): Promise<void> {
+  const db = getFirestore();
+  const cardRef = db.collection("checkins").doc(checkinId);
+  await db.runTransaction(async (tx) => {
+    const card = (await tx.get(cardRef)).data();
+    if (!card || card.groupChatId || card.checkedOutAt != null) return;
+    const uid = card.uid as string;
+    const now = Date.now();
+    const chatRef = db.collection("chats").doc();
+    tx.set(chatRef, {
+      type: "group",
+      title: card.topic,
+      ownerUid: uid,
+      checkinId,
+      spotId: card.spotId ?? null,
+      memberUids: [uid],
+      createdAt: Timestamp.fromMillis(now),
+      lastMessage: null,
+      lastMessageAt: Timestamp.fromMillis(now),
+      leftUids: [],
+      unread: { [uid]: 0 },
+    });
+    tx.update(cardRef, { groupChatId: chatRef.id, groupMemberCount: 1 });
+  });
+}
+
+/** 탈퇴한 사람을 뺀 지금 인원 */
+function activeMembers(chat: FirebaseFirestore.DocumentData): string[] {
+  const left = new Set((chat.leftUids as string[] | undefined) ?? []);
+  return ((chat.memberUids as string[] | undefined) ?? []).filter((u) => !left.has(u));
+}
+
+type JoinResult = "joined" | "full" | "notCheckedIn" | "gone";
+
+/** 카드에 열린 그룹 채팅에 들어간다. 같은 장소에 체크인해 있고 연 사람과 차단 관계가 없어야 한다. */
+export const joinGroupChat = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요해요.");
+  const checkinId = String(request.data?.checkinId ?? "");
+  if (!checkinId) throw new HttpsError("invalid-argument", "카드가 없어요.");
+
+  const db = getFirestore();
+  const cardRef = db.collection("checkins").doc(checkinId);
+  const [meSnap, cardSnap] = await Promise.all([
+    db.collection("users").doc(uid).get(),
+    cardRef.get(),
+  ]);
+  const me = meSnap.data();
+  if (!me || me.suspended === true) {
+    throw new HttpsError("permission-denied", "그룹 채팅에 들어갈 수 없어요.");
+  }
+  const card = cardSnap.data();
+  const chatId = card?.groupChatId as string | undefined;
+  if (!card || !chatId || card.checkedOutAt != null) {
+    return { result: "gone" satisfies JoinResult };
+  }
+  const owner = card.uid as string;
+  if (owner !== uid) {
+    // 어느 한쪽이 차단했으면 들어가지 않는다(차단 사실은 알리지 않는다).
+    const [iBlocked, theyBlocked] = await Promise.all([
+      db.collection("users").doc(uid).collection("blocks").doc(owner).get(),
+      db.collection("users").doc(owner).collection("blocks").doc(uid).get(),
+    ]);
+    if (iBlocked.exists || theyBlocked.exists) {
+      return { result: "gone" satisfies JoinResult };
+    }
+    // 나도 같은 장소에 체크인해 있어야 한다.
+    const myCard = await db
+      .collection("checkins")
+      .where("uid", "==", uid)
+      .where("spotId", "==", card.spotId)
+      .where("checkedOutAt", "==", null)
+      .limit(1)
+      .get();
+    if (myCard.empty) return { result: "notCheckedIn" satisfies JoinResult };
+  }
+
+  const chatRef = db.collection("chats").doc(chatId);
+  const result = await db.runTransaction(async (tx): Promise<JoinResult> => {
+    const chat = (await tx.get(chatRef)).data();
+    if (!chat || chat.type !== "group") return "gone";
+    const members = activeMembers(chat);
+    if ((chat.memberUids as string[]).includes(uid)) return "joined";
+    if (members.length >= GROUP_CHAT_MAX) return "full";
+    tx.update(chatRef, {
+      memberUids: FieldValue.arrayUnion(uid),
+      [`unread.${uid}`]: 0,
+    });
+    tx.update(cardRef, { groupMemberCount: members.length + 1 });
+    return "joined";
+  });
+  return result === "joined" ? { result, chatId } : { result };
+});
+
+/** 그룹 채팅에서 나간다. 멤버에서 빠져 방을 더 읽을 수 없고, 카드의 인원 수가 줄어든다. */
+export const leaveGroupChat = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요해요.");
+  const chatId = String(request.data?.chatId ?? "");
+  if (!chatId) throw new HttpsError("invalid-argument", "대화방이 없어요.");
+
+  const db = getFirestore();
+  const chatRef = db.collection("chats").doc(chatId);
+  await db.runTransaction(async (tx) => {
+    const chat = (await tx.get(chatRef)).data();
+    if (!chat || chat.type !== "group" || !(chat.memberUids as string[]).includes(uid)) return;
+    const cardRef = chat.checkinId
+      ? db.collection("checkins").doc(chat.checkinId as string)
+      : null;
+    const card = cardRef ? await tx.get(cardRef) : null;
+    tx.update(chatRef, {
+      memberUids: FieldValue.arrayRemove(uid),
+      [`unread.${uid}`]: FieldValue.delete(),
+    });
+    if (cardRef && card?.exists) {
+      tx.update(cardRef, {
+        groupMemberCount: activeMembers(chat).filter((u) => u !== uid).length,
+      });
+    }
+  });
+  return { ok: true };
+});
 
 // ── 푸시 알림(FCM) ─────────────────────────────────────
 
@@ -387,7 +563,6 @@ export const sendTestPush = onCall(async (request) => {
 const REQUEST_MESSAGE_MAX = 40;
 const REQUEST_EXPIRY_MS = 30 * 60 * 1000;
 const FREE_DAILY_REQUESTS = 5;
-const CHAT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 /** 성사 대화 기준: 양쪽이 각각 이 수 이상 메시지를 보낸 대화방(BIND_blueprint 7장 NSM) */
 const SUCCESS_MESSAGES = 3;
 /** 신고 기록 보관 기간(개인정보처리방침): 접수 1년 뒤 TTL로 삭제 */
@@ -524,11 +699,11 @@ export const respondRequest = onCall(async (request) => {
     const chatRef = db.collection("chats").doc();
     const fromUid = req.fromUid as string;
     tx.set(chatRef, {
+      type: "direct",
       memberUids: [fromUid, uid],
       requestId,
       spotId: req.spotId ?? null,
       createdAt: Timestamp.fromMillis(now),
-      expiresAt: Timestamp.fromMillis(now + CHAT_RETENTION_MS),
       lastMessage: req.message,
       lastMessageAt: Timestamp.fromMillis(now),
       leftUids: [],
@@ -538,8 +713,6 @@ export const respondRequest = onCall(async (request) => {
       senderUid: fromUid,
       text: req.message,
       sentAt: Timestamp.fromMillis(now),
-      // 대화방과 함께 TTL로 지워지도록
-      expiresAt: Timestamp.fromMillis(now + CHAT_RETENTION_MS),
     });
     tx.update(reqRef, {
       status: "accepted",
@@ -589,8 +762,9 @@ export const onMessageCreated = onDocumentCreated(
       };
       for (const o of others) update[`unread.${o}`] = FieldValue.increment(1);
       // 성사 대화(NSM): 양쪽이 각각 SUCCESS_MESSAGES개 이상 보낸 첫 순간을 남긴다.
-      // 대화방은 7일 뒤 지워지므로, 매일 집계(aggregateDailyMetrics)가 이 시각으로 센다.
-      if (!chat.succeededAt) {
+      // 매일 집계(aggregateDailyMetrics)가 이 시각으로 그날의 성사 대화를 센다.
+      // 그룹 채팅은 성사 대화로 세지 않는다(1:1만).
+      if (!chat.succeededAt && chat.type !== "group") {
         const counts = { ...((chat.messageCounts as Record<string, number>) ?? {}) };
         counts[sender] = (counts[sender] ?? 0) + 1;
         const members = chat.memberUids as string[];
@@ -610,13 +784,16 @@ export const onMessageCreated = onDocumentCreated(
     );
     const name = await nicknameOf(sender);
     const text = String(msg.text ?? "");
+    const short = text.length > 100 ? `${text.slice(0, 100)}…` : text;
+    // 그룹 채팅은 방 이름(주제)을 제목으로, 보낸 사람을 본문 앞에 붙인다.
+    const group = chat.type === "group";
     await Promise.all(
       others.map(async (o) => {
         if (await blocked(o, sender)) return;
         await pushToUser(o, {
           type: "message",
-          title: name,
-          body: text.length > 100 ? `${text.slice(0, 100)}…` : text,
+          title: group ? String(chat.title ?? "그룹 채팅") : name,
+          body: group ? `${name}: ${short}` : short,
           route: `/chats/${event.params.chatId}`,
           collapseKey: `chat_${event.params.chatId}`,
         });
@@ -671,13 +848,6 @@ export const onReviewCreated = onDocumentCreated(
   "chats/{chatId}/reviews/{reviewerUid}",
   async (event) => {
     const db = getFirestore();
-    // 평가도 대화방과 함께 7일 뒤 TTL로 지워지게 방의 만료 시각을 붙인다.
-    // (TTL은 상위 문서가 지워져도 하위 컬렉션을 지우지 않는다)
-    const chat = await db.collection("chats").doc(event.params.chatId).get();
-    const chatExpiresAt = chat.get("expiresAt") as Timestamp | undefined;
-    await event.data?.ref.update({
-      expiresAt: chatExpiresAt ?? Timestamp.fromMillis(Date.now() + CHAT_RETENTION_MS),
-    });
     if (event.data?.get("rating") !== "good") return;
     const targetUid = event.data?.get("targetUid") as string;
     const userRef = db.collection("users").doc(targetUid);
@@ -738,7 +908,7 @@ async function notifyArrival(
 // ── 3. 지표 집계 ──────────────────────────────────────
 //
 // 매일 0시 30분(KST)에 전날 지표를 metrics/{YYYY-MM-DD}에 저장한다(숫자만, 개인 식별 정보 없음).
-// 대화방·메시지는 7일 뒤 TTL로 지워지므로 그 전에 세어 둔다. 클라이언트는 읽을 수 없다(firestore.rules).
+// 날짜별로 숫자만 남겨 두어 대화방을 매번 다시 세지 않는다. 클라이언트는 읽을 수 없다(firestore.rules).
 // 지표 정의: BIND_blueprint 7장(NSM·보조 1~3·가드레일).
 
 const DAY_MS = 24 * 60 * 60 * 1000;

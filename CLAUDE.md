@@ -63,7 +63,7 @@ dart run flutter_launcher_icons                   # 앱 아이콘 다시 생성(
 - 파생 provider는 바뀐 데이터 묶음만 다시 그리게 쪼개 둔다(`test/fine_grained_rebuild_test.dart`가 검사).
 - **로그인·프로필**은 `AccountController`(lib/features/session/account_controller.dart) → `AccountRepository`(lib/data/account/). 실제 모드는 Google 로그인(iOS는 Apple 로그인도, `AppleSignInButton`은 iOS에서만 보임) + `users/{uid}` + 닉네임 예약 `nicknames/{key}`. Apple로 가입한 계정은 탈퇴 전 `revokeForDeletion`이 Apple 토큰을 해지한다(App Store 규정).
 - **세션**(`lib/features/session/session.dart`)은 라우터 가드의 기준(로그인·온보딩·정지·체크인)이다. 데모 저장소가 로그인·온보딩·체크인 시 세션을 갱신한다. 이 Notifier만 교체하면 라우터 가드는 그대로 동작한다.
-- **신뢰가 필요한 값은 Cloud Functions가 쓴다**(클라이언트 금지): 요청 보내기·수락(`sendRequest`/`respondRequest`, 수락 시 채팅방 생성), 만료(`expireRequests`), 장소 인원(`onCheckinWritten`), 마지막 메시지·안 읽은 수·성사 시각(`onMessageCreated`), 일별 지표(`aggregateDailyMetrics` → `metrics/{YYYY-MM-DD}`, 앱은 읽기 불가), 정지(`onReportCreated`), 좋았어요 수(`onReviewCreated`), 요청 푸시(`onRequestWritten`), 탈퇴(`deleteAccount`). 보안 규칙은 `firestore.rules`.
+- **신뢰가 필요한 값은 Cloud Functions가 쓴다**(클라이언트 금지): 요청 보내기·수락(`sendRequest`/`respondRequest`, 수락 시 1:1 채팅방 생성), 그룹 채팅 열기·참여·나가기(`onCheckinWritten`이 카드의 `openGroupChat`을 보고 방 생성, `joinGroupChat`/`leaveGroupChat`, 카드의 `groupChatId`·`groupMemberCount`), 만료(`expireRequests`), 장소 인원(`onCheckinWritten`), 마지막 메시지·안 읽은 수·성사 시각(`onMessageCreated`), 일별 지표(`aggregateDailyMetrics` → `metrics/{YYYY-MM-DD}`, 앱은 읽기 불가), 정지(`onReportCreated`), 좋았어요 수(`onReviewCreated`), 요청 푸시(`onRequestWritten`), 탈퇴(`deleteAccount`). 보안 규칙은 `firestore.rules`.
 - **앱 안 알림**(요청 도착·수락·만료 등)은 `inAppNoticeProvider`로 보내면 화면 위 배너로 뜬다.
 - **푸시(FCM)**는 `PushController`(lib/core/push/, `pushProvider`)가 권한·토큰(`users/{uid}/fcmTokens`)·토픽·받은 알림을 관리한다. 서버는 data에 `type`·`route`를 넣어 보내고, 앱은 `PushRoute.parse`로 허용된 앱 안 경로만 연다. 알림 채널 id는 `bind_default`(앱·서버 같게). 백그라운드 핸들러는 `runApp` 전에 등록한다.
 
@@ -73,6 +73,7 @@ dart run flutter_launcher_icons                   # 앱 아이콘 다시 생성(
 - 색·글꼴·간격은 `AppColors` / `AppTypography` / `AppSpacing` / `AppRadius`만 사용한다. `primary`는 행동·선택에만.
 - **아이폰·아이패드 모두 지원, 세로 고정**(iPad는 `UIRequiresFullScreen`, 멀티태스킹 미지원). 레이아웃 기준 기기는 iPad Air 11"(M4, 820pt)·iPad Pro 13"(M4, 1032pt). 넓은 화면에서는 `ContentWidthFrame`(lib/app/)이 앱 전체를 `AppSpacing.maxContentWidth`(640) 가운데 열로 모으므로 화면마다 따로 너비를 제한하지 않는다. `test/app_flow_test.dart`가 폰·두 아이패드 크기로 전체 흐름을 돈다.
 - 앱은 **다크 모드 기본**이다(`AppColors` 값이 다크 팔레트). `heading`을 배경으로 쓰지 말고 띄울 면은 `elevated`를 쓴다. 자세한 값은 docs/DESIGN.md "다크 모드 기본".
+- **채팅은 두 종류**(`ChatType`, 화면 이름 "1:1 채팅" / "그룹 채팅", 2026-11-23 결정, US-025). 1:1은 요청 수락으로, 그룹은 체크인할 때 "그룹 채팅도 열기"로 열린다(최대 `AppLimits.groupChatMaxMembers`). 성사 대화(NSM)와 대화 평가는 1:1만. 1:1 전용 로직(`Chat.otherUid`, `chatWith`, 평가)을 그룹 방에 쓰지 않는다. **대화방 보관 기간 제한은 없다**(2026-11-23 결정, 채팅방·메시지·평가 TTL 해제, 신고만 1년 TTL).
 - 연애·만남 키워드는 영구 제외(US-W08). 키워드는 24개(`TopicCategory`, 이름은 Firestore에 저장되므로 바꾸지 않는다)이고 기타는 직접 입력(`Checkin.categoryCustom`).
 - **위치(GPS)·PIN·체류 시간 제한은 없다**(2026-11-16 결정). 체크인은 한 화면에서 장소를 검색해 고르고 주제 한 줄을 올리면 끝난다. 체크아웃할 때까지 카드가 보인다.
 - 장소는 **카카오 로컬 키워드 장소 검색**으로 고른다(2026-11-16 결정, 우편번호 서비스는 가게 이름 검색이 안 돼서 제외). 같은 장소 판정은 카카오 장소 ID(`Spot.placeId`, Firestore `spots/{placeId}`)로 한다.

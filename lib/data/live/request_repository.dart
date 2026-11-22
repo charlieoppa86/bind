@@ -9,6 +9,9 @@ import '../place/place_search.dart';
 /// 서버가 판단한 요청 보내기 결과
 enum RemoteSendResult { sent, duplicate, dailyLimit, notCheckedIn, gone }
 
+/// 서버가 판단한 그룹 채팅 참여 결과(joinGroupChat)
+enum RemoteJoinResult { joined, full, notCheckedIn, gone }
+
 /// 대화 요청(`chatRequests`)·채팅방(`chats`)·상대 프로필(`users`) Firestore 저장소.
 ///
 /// 요청 만들기·수락·거절은 신뢰가 필요해서 Cloud Functions만 한다
@@ -52,7 +55,7 @@ class RequestRepository {
         ],
       );
 
-  /// 대화방의 최근 메시지(보관 기간 7일이라 최근 300개면 충분하다)
+  /// 대화방의 최근 메시지 300개
   Stream<List<ChatMessage>> watchMessages(String chatId) => _db
       .collection('chats')
       .doc(chatId)
@@ -67,17 +70,14 @@ class RequestRepository {
       );
 
   /// 메시지 보내기. 마지막 메시지·안 읽은 수는 서버(onMessageCreated)가 갱신한다.
-  /// [expiresAt]은 대화방과 같은 값(TTL로 함께 지워지도록).
   Future<void> sendMessage({
     required String chatId,
     required String uid,
     required String text,
-    required DateTime expiresAt,
   }) => _db.collection('chats').doc(chatId).collection('messages').add({
     'senderUid': uid,
     'text': text,
     'sentAt': FieldValue.serverTimestamp(),
-    'expiresAt': Timestamp.fromDate(expiresAt),
   });
 
   /// 내 안 읽은 수를 0으로
@@ -122,6 +122,24 @@ class RequestRepository {
         .call<Map<String, dynamic>>({'requestId': requestId, 'accept': accept});
     return res.data['chatId'] as String?;
   }
+
+  /// 카드에 열린 그룹 채팅에 들어간다(US-025). 같은 장소·차단·인원은 서버가 확인한다.
+  Future<(RemoteJoinResult, String?)> joinGroupChat(String checkinId) async {
+    final res = await _functions
+        .httpsCallable('joinGroupChat')
+        .call<Map<String, dynamic>>({'checkinId': checkinId});
+    final name = res.data['result'] as String?;
+    final result = RemoteJoinResult.values.firstWhere(
+      (r) => r.name == name,
+      orElse: () => RemoteJoinResult.gone,
+    );
+    return (result, res.data['chatId'] as String?);
+  }
+
+  /// 그룹 채팅에서 나간다. 멤버 목록에서 빠지고 카드의 인원 수가 줄어든다.
+  Future<void> leaveGroupChat(String chatId) => _functions
+      .httpsCallable('leaveGroupChat')
+      .call<Map<String, dynamic>>({'chatId': chatId});
 
   static List<ChatRequest> _toRequests(QuerySnapshot<Map<String, dynamic>> s) =>
       [for (final d in s.docs) ChatRequest.fromMap(d.id, d.data())];

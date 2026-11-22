@@ -6,6 +6,7 @@ import '../../../app/router/routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
+import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
@@ -244,6 +245,10 @@ class TopicCard extends StatelessWidget {
                 style: AppTypography.title.copyWith(fontSize: 18, height: 1.45),
               ),
             ),
+            if (c.groupChatId case final groupId?) ...[
+              const SizedBox(height: AppSpacing.sm),
+              GroupChatBadge(chatId: groupId, count: c.groupMemberCount),
+            ],
             const SizedBox(height: AppSpacing.md),
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.md),
@@ -270,6 +275,36 @@ class TopicCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 카드에 열린 그룹 채팅 표시: "그룹 채팅 · 3/8명" (참여 중이면 "참여 중")
+class GroupChatBadge extends ConsumerWidget {
+  const GroupChatBadge({required this.chatId, required this.count, super.key});
+
+  final String chatId;
+  final int count;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final joined = ref.watch(isGroupMemberProvider(chatId));
+    return Row(
+      children: [
+        const Icon(Icons.groups_rounded, size: 16, color: AppColors.primary),
+        const SizedBox(width: AppSpacing.xs),
+        // 좁은 곳(내 체크인의 버튼 옆)에서는 줄을 바꾼다.
+        Flexible(
+          child: Text(
+            '${ChatType.group.label} · $count/${AppLimits.groupChatMaxMembers}명'
+            '${joined ? ' · 참여 중' : ''}',
+            style: AppTypography.caption.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

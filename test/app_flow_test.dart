@@ -121,7 +121,9 @@ Future<void> _runFlow(WidgetTester tester, Size size, double dpr) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('수락하고 대화 시작'));
   await tester.pumpAndSettle();
-  expect(find.textContaining('일 뒤 대화가 사라집니다'), findsOneWidget);
+  expect(find.text('대화 요청이 수락되어 1:1 채팅이 시작됐어요'), findsOneWidget);
+  // 대화방 보관 기간 제한이 없다(2026-11-23)
+  expect(find.textContaining('사라집니다'), findsNothing);
 
   // 메시지 보내기 → 답장
   await tester.enterText(find.byType(TextField), '안녕하세요!');

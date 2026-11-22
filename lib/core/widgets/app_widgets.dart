@@ -248,6 +248,31 @@ class InitialAvatar extends StatelessWidget {
   }
 }
 
+/// 그룹 채팅방 아바타(US-025). 사람 아바타([InitialAvatar])와 모양을 맞춘 원형.
+class GroupAvatar extends StatelessWidget {
+  const GroupAvatar({this.size = 40, super.key});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: AppColors.primarySoft,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.groups_rounded,
+        size: size * 0.5,
+        color: AppColors.primary,
+      ),
+    );
+  }
+}
+
 /// "좋았어요" [AppLimits.trustBadgeThreshold]회 이상 받은 사람 표시(US-017)
 class TrustBadge extends StatelessWidget {
   const TrustBadge({super.key});

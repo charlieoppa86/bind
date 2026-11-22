@@ -6,7 +6,7 @@ import '../../../app/router/routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
-import '../../../core/constants/app_limits.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/demo/demo_providers.dart';
@@ -44,34 +44,13 @@ class ChatListScreen extends ConsumerWidget {
           ? const EmptyState(
               icon: Icons.chat_bubble_outline,
               title: '아직 대화가 없어요',
-              message: '요청이 수락되면 여기서 1:1 대화를 이어갈 수 있어요.',
+              message: '요청이 수락되거나 그룹 채팅에 들어가면 여기서 대화를 이어갈 수 있어요.',
             )
           : ListView.builder(
-              itemCount: ids.length + 1,
-              itemBuilder: (_, i) => i == 0
-                  ? const _RetentionNote()
-                  : _ChatRow(key: ValueKey(ids[i - 1]), chatId: ids[i - 1]),
+              itemCount: ids.length,
+              itemBuilder: (_, i) =>
+                  _ChatRow(key: ValueKey(ids[i]), chatId: ids[i]),
             ),
-    );
-  }
-}
-
-class _RetentionNote extends StatelessWidget {
-  const _RetentionNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.xs,
-        AppSpacing.lg,
-        AppSpacing.sm,
-      ),
-      child: Text(
-        '대화는 시작하고 ${AppLimits.chatRetention.inDays}일이 지나면 사라져요',
-        style: AppTypography.caption,
-      ),
     );
   }
 }
@@ -85,12 +64,25 @@ class _ChatRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final chat = ref.watch(chatProvider(chatId));
     if (chat == null) return const SizedBox.shrink();
-    final otherUid = chat.otherUid(DemoDb.myUid);
-    final (name, job, deleted) = ref.watch(
-      userProvider(otherUid)
-          .select((u) => (u?.nickname ?? '', u?.jobLabel, u?.deleted ?? false)),
-    );
-    final left = chat.leftUids.contains(otherUid) || deleted;
+    // 방 종류는 바뀌지 않으므로 1:1일 때만 상대 프로필을 구독한다.
+    final String name;
+    final String? job;
+    final bool left;
+    if (chat.isGroup) {
+      name = chat.title ?? ChatType.group.label;
+      job = null;
+      left = false;
+    } else {
+      final otherUid = chat.otherUid(DemoDb.myUid);
+      final (nickname, jobLabel, deleted) = ref.watch(
+        userProvider(
+          otherUid,
+        ).select((u) => (u?.nickname ?? '', u?.jobLabel, u?.deleted ?? false)),
+      );
+      name = nickname;
+      job = jobLabel;
+      left = chat.leftUids.contains(otherUid) || deleted;
+    }
     final unread = ref.watch(unreadProvider(chatId));
 
     return Pressable(
@@ -103,7 +95,10 @@ class _ChatRow extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            InitialAvatar(left ? '' : name, size: 48, dimmed: left),
+            if (chat.isGroup)
+              const GroupAvatar(size: 48)
+            else
+              InitialAvatar(left ? '' : name, size: 48, dimmed: left),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -138,6 +133,17 @@ class _ChatRow extends ConsumerWidget {
                   const SizedBox(height: 2),
                   Row(
                     children: [
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          right: AppSpacing.xs + 2,
+                        ),
+                        child: StatusPill(
+                          chat.isGroup
+                              ? '${ChatType.group.label} · ${chat.activeMemberCount}명'
+                              : ChatType.direct.label,
+                          tone: chat.isGroup ? PillTone.active : PillTone.muted,
+                        ),
+                      ),
                       Expanded(
                         child: Text(
                           chat.lastMessage ?? '대화가 열렸어요. 먼저 인사해 보세요!',
@@ -156,8 +162,7 @@ class _ChatRow extends ConsumerWidget {
                       if (unread > 0) ...[
                         const SizedBox(width: AppSpacing.sm),
                         CountBadge(unread),
-                      ] else
-                        _ExpiringSoon(chat.expiresAt),
+                      ],
                     ],
                   ),
                 ],
@@ -180,24 +185,5 @@ class _RelativeTime extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final now = ref.watch(clockProvider);
     return Text(TimeFormat.relative(time, now), style: AppTypography.caption);
-  }
-}
-
-/// 보관 기간이 하루 안으로 남았으면 "곧 사라져요" — 시계만 구독
-class _ExpiringSoon extends ConsumerWidget {
-  const _ExpiringSoon(this.expiresAt);
-
-  final DateTime expiresAt;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final soon = ref.watch(
-      clockProvider.select((now) => expiresAt.difference(now).inDays <= 1),
-    );
-    if (!soon) return const SizedBox.shrink();
-    return const Padding(
-      padding: EdgeInsets.only(left: AppSpacing.sm),
-      child: StatusPill('곧 사라져요', tone: PillTone.muted),
-    );
   }
 }

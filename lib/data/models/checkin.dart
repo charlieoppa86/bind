@@ -20,6 +20,9 @@ class Checkin {
     this.checkedOutAt,
     this.hasTrustBadge = false,
     this.notifyWhenSomeoneArrives = false,
+    this.openGroupChat = false,
+    this.groupChatId,
+    this.groupMemberCount = 0,
   });
 
   factory Checkin.fromMap(String id, Map<String, dynamic> map) => Checkin(
@@ -40,6 +43,9 @@ class Checkin {
     checkedOutAt: toDateTime(map['checkedOutAt']),
     hasTrustBadge: map['hasTrustBadge'] as bool? ?? false,
     notifyWhenSomeoneArrives: map['notifyWhenSomeoneArrives'] as bool? ?? false,
+    openGroupChat: map['openGroupChat'] as bool? ?? false,
+    groupChatId: map['groupChatId'] as String?,
+    groupMemberCount: (map['groupMemberCount'] as num?)?.toInt() ?? 0,
   );
 
   final String id;
@@ -66,6 +72,19 @@ class Checkin {
   /// US-015 "누가 오면 알려줘"
   final bool notifyWhenSomeoneArrives;
 
+  /// US-025 체크인할 때 "그룹 채팅도 열기"를 켰는지(앱이 쓰는 값).
+  /// 서버(onCheckinWritten)가 이 값을 보고 그룹 채팅방을 만든다.
+  final bool openGroupChat;
+
+  /// 이 카드로 연 그룹 채팅방 id. 서버만 쓴다. 없으면 1:1 요청만 받는다.
+  final String? groupChatId;
+
+  /// 그룹 채팅에 지금 있는 사람 수. 방에 들어가지 않은 사람도 카드에서 보도록
+  /// 서버가 카드에 적어 둔다(방 문서는 참여자만 읽을 수 있다).
+  final int groupMemberCount;
+
+  bool get hasGroupChat => groupChatId != null;
+
   /// 체류 시간 제한이 없다. 체크아웃 전까지 보인다.
   bool isActiveAt(DateTime now) => checkedOutAt == null;
 
@@ -84,6 +103,9 @@ class Checkin {
     checkedOutAt: checkedOutAt,
     hasTrustBadge: hasTrustBadge,
     notifyWhenSomeoneArrives: notifyWhenSomeoneArrives,
+    openGroupChat: openGroupChat,
+    groupChatId: groupChatId,
+    groupMemberCount: groupMemberCount,
   );
 
   Checkin copyWith({
@@ -92,6 +114,8 @@ class Checkin {
     String? Function()? categoryCustom,
     DateTime? checkedOutAt,
     bool? notifyWhenSomeoneArrives,
+    String? groupChatId,
+    int? groupMemberCount,
   }) => Checkin(
     id: id,
     uid: uid,
@@ -109,6 +133,9 @@ class Checkin {
     hasTrustBadge: hasTrustBadge,
     notifyWhenSomeoneArrives:
         notifyWhenSomeoneArrives ?? this.notifyWhenSomeoneArrives,
+    openGroupChat: openGroupChat,
+    groupChatId: groupChatId ?? this.groupChatId,
+    groupMemberCount: groupMemberCount ?? this.groupMemberCount,
   );
 
   Map<String, dynamic> toMap() => {
@@ -123,5 +150,6 @@ class Checkin {
     'startedAt': toTimestamp(startedAt),
     'checkedOutAt': toTimestamp(checkedOutAt),
     'notifyWhenSomeoneArrives': notifyWhenSomeoneArrives,
+    'openGroupChat': openGroupChat,
   };
 }
