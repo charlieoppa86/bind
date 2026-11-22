@@ -42,8 +42,12 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
   final _keywordCustom = TextEditingController();
   final _keywordCustomFocus = FocusNode();
 
+  /// US-025 이 카드로 그룹 채팅도 열지
+  final _openGroupChat = ValueNotifier<bool>(false);
+
   @override
   void dispose() {
+    _openGroupChat.dispose();
     _keywordCustom.dispose();
     _keywordCustomFocus.dispose();
     _query.dispose();
@@ -82,6 +86,7 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
           topic: _topic.text,
           category: _category.value!,
           categoryCustom: _keywordCustom.text,
+          openGroupChat: _openGroupChat.value,
         );
     context.go(Routes.spot);
   }
@@ -160,6 +165,20 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
                     onSelected: (c) => _category.value = c,
                     customController: _keywordCustom,
                     customFocus: _keywordCustomFocus,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── 대화 방식 ──
+                const _Label('대화 방식'),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _openGroupChat,
+                  builder: (_, on, _) => _GroupChatOption(
+                    value: on,
+                    onChanged: (v) {
+                      HapticFeedback.selectionClick();
+                      _openGroupChat.value = v;
+                    },
                   ),
                 ),
               ],
@@ -538,6 +557,64 @@ class _QuickPickChip extends ConsumerWidget {
       compact: true,
       selected: false,
       onTap: () => onPick(spot.toPlace()),
+    );
+  }
+}
+
+/// US-025 "그룹 채팅도 열기". 끄면 지금처럼 1:1 요청만 받는다.
+class _GroupChatOption extends StatelessWidget {
+  const _GroupChatOption({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: () => onChanged(!value),
+      color: AppColors.elevated,
+      borderRadius: AppRadius.card,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.groups_outlined,
+              color: value ? AppColors.primary : AppColors.secondary,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${ChatType.group.label}도 열기',
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: AppColors.heading,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value
+                        ? '같은 장소 사람들이 요청 없이 바로 들어와 함께 이야기해요 '
+                              '(최대 ${AppLimits.groupChatMaxMembers}명). '
+                              '${ChatType.direct.label} 요청도 그대로 받아요.'
+                        : '끄면 ${ChatType.direct.label} 요청만 받아요.',
+                    style: AppTypography.caption,
+                  ),
+                ],
+              ),
+            ),
+            Switch(value: value, onChanged: onChanged),
+          ],
+        ),
+      ),
     );
   }
 }

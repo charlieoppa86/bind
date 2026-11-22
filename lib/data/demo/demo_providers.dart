@@ -199,6 +199,12 @@ final chatIdWithProvider = Provider.family<String?, String>((ref, uid) {
   return _db(ref).chatWith(uid, DateTime.now())?.id;
 });
 
+/// 이 그룹 채팅에 내가 들어가 있는지(US-025)
+final isGroupMemberProvider = Provider.family<bool, String>((ref, chatId) {
+  _watch(ref, const [DemoPart.chats]);
+  return _db(ref).chat(chatId)?.memberUids.contains(DemoDb.myUid) ?? false;
+});
+
 /// 대화방 하나의 메시지. 그 방의 메시지 버전만 본다.
 final messagesProvider = Provider.family<List<ChatMessage>, String>((
   ref,

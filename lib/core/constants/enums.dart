@@ -144,3 +144,16 @@ enum ChatReviewRating { good, soso }
 
 /// 신고·차단을 호출한 위치 (IA 글로벌 > 신고).
 enum ReportSource { feed, request, chat }
+
+/// 대화방 종류 (US-009 1:1, US-025 그룹).
+/// 이름(name)은 Firestore `chats/{id}.type`에 저장되므로 바꾸지 않는다.
+enum ChatType {
+  /// 대화 요청을 수락하면 열리는 1:1 채팅
+  direct('1:1 채팅'),
+
+  /// 체크인할 때 연 그룹 채팅. 같은 장소 사람이 요청 없이 들어온다.
+  group('그룹 채팅');
+
+  const ChatType(this.label);
+  final String label;
+}

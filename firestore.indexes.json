@@ -33,7 +33,7 @@
     {
       "collectionGroup": "chats",
       "fieldPath": "expiresAt",
-      "ttl": true,
+      "ttl": false,
       "indexes": [
         {
           "order": "ASCENDING",
@@ -52,7 +52,7 @@
     {
       "collectionGroup": "messages",
       "fieldPath": "expiresAt",
-      "ttl": true,
+      "ttl": false,
       "indexes": [
         {
           "order": "ASCENDING",
@@ -71,7 +71,7 @@
     {
       "collectionGroup": "reviews",
       "fieldPath": "expiresAt",
-      "ttl": true,
+      "ttl": false,
       "indexes": []
     },
     {

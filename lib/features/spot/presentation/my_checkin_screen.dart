@@ -7,12 +7,14 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../core/constants/app_limits.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../data/demo/demo_providers.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../my/presentation/plus_prompt.dart';
+import 'spot_feed_screen.dart' show GroupChatBadge;
 
 /// 스팟 > 스팟 피드 > 내 체크인 (US-011)
 class MyCheckinScreen extends ConsumerWidget {
@@ -124,6 +126,32 @@ class MyCheckinScreen extends ConsumerWidget {
                                     fontSize: 18,
                                   ),
                                 ),
+                                if (c.groupChatId case final groupId?) ...[
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: GroupChatBadge(
+                                          chatId: groupId,
+                                          count: c.groupMemberCount,
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => context.push(
+                                          Routes.chatRoom(groupId),
+                                        ),
+                                        child: const Text('들어가기'),
+                                      ),
+                                    ],
+                                  ),
+                                ] else if (c.openGroupChat) ...[
+                                  // 실제 모드: 서버가 방을 만드는 동안
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    '${ChatType.group.label}을 여는 중이에요…',
+                                    style: AppTypography.caption,
+                                  ),
+                                ],
                               ],
                             ),
                           ),

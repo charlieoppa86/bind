@@ -10,11 +10,13 @@ import '../../../core/constants/app_limits.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../data/demo/demo_providers.dart';
 import '../../../data/live/live_sync.dart';
 import '../../../data/demo/demo_store.dart';
 import '../../../data/models/chat.dart';
 import '../../safety/presentation/safety_menu.dart';
+import 'group_members_sheet.dart';
 
 /// 대화방 상대 정보: (상대 uid, 상대가 떠났는지). 대화방이 없으면 null.
 final _roomPeerProvider = Provider.autoDispose.family<(String, bool)?, String>((
@@ -30,10 +32,10 @@ final _roomPeerProvider = Provider.autoDispose.family<(String, bool)?, String>((
   return (otherUid, chat.leftUids.contains(otherUid) || deleted);
 });
 
-/// 채팅 > 대화 목록 > 대화방 (US-009). 텍스트만 주고받는다.
+/// 채팅 > 대화 목록 > 대화방 (US-009 1:1, US-025 그룹). 텍스트만 주고받는다.
 ///
-/// 화면은 "상대가 누구이고 떠났는지"만 구독한다. 새 메시지가 오면 메시지 목록만,
-/// 입력 중에는 입력창의 보내기 버튼만 다시 그린다.
+/// 1:1 화면은 "상대가 누구이고 떠났는지"만 구독한다. 새 메시지가 오면 메시지 목록만,
+/// 입력 중에는 입력창의 보내기 버튼만 다시 그린다. 그룹 채팅은 [_GroupRoom].
 class ChatRoomScreen extends ConsumerWidget {
   const ChatRoomScreen({required this.chatId, super.key});
 
@@ -50,14 +52,25 @@ class ChatRoomScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final peer = ref.watch(_roomPeerProvider(chatId));
+    // 방 종류는 바뀌지 않는다. 내가 나간 그룹은 사라진 대화로 본다.
+    final kind = ref.watch(
+      chatProvider(chatId).select(
+        (c) => c == null
+            ? null
+            : c.isGroup && !c.memberUids.contains(DemoDb.myUid)
+            ? null
+            : c.type,
+      ),
+    );
+    if (kind == ChatType.group) return _GroupRoom(chatId: chatId);
+    final peer = kind == null ? null : ref.watch(_roomPeerProvider(chatId));
     if (peer == null) {
       return Scaffold(
         appBar: AppBar(),
         body: const EmptyState(
           icon: Icons.chat_bubble_outline,
-          title: '사라진 대화예요',
-          message: '대화는 시작하고 일정 기간이 지나면 사라져요.',
+          title: '볼 수 없는 대화예요',
+          message: '나간 그룹 채팅이거나 더 이상 없는 대화예요.',
         ),
       );
     }
@@ -84,7 +97,6 @@ class ChatRoomScreen extends ConsumerWidget {
         ),
         body: Column(
           children: [
-            _RetentionBanner(chatId: chatId),
             _ReadMarker(chatId),
             Expanded(child: _MessageList(chatId)),
             if (left) const _LeftNotice() else _Composer(chatId: chatId),
@@ -113,7 +125,92 @@ class _RoomTitle extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(name, style: AppTypography.supportingTitle),
-        if (job != null) Text(job, style: AppTypography.caption),
+        Text(
+          [ChatType.direct.label, ?job].join(' · '),
+          style: AppTypography.caption,
+        ),
+      ],
+    );
+  }
+}
+
+/// 그룹 채팅방(US-025): 방 이름(주제)·인원, 참여자 시트(신고·차단·나가기).
+/// 1:1과 달리 나갈 때 평가를 묻지 않고, 누가 떠나도 남은 사람끼리 이어간다.
+class _GroupRoom extends ConsumerWidget {
+  const _GroupRoom({required this.chatId});
+
+  final String chatId;
+
+  Future<void> _openMembers(BuildContext context, WidgetRef ref) async {
+    final leave = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => GroupMembersSheet(chatId: chatId),
+    );
+    if (leave != true || !context.mounted) return;
+    final ok = await showConfirm(
+      context,
+      title: '${ChatType.group.label}에서 나갈까요?',
+      message: '나가면 이 대화가 목록에서 사라져요.\n카드가 남아 있으면 다시 들어올 수 있어요.',
+      confirmLabel: '나가기',
+      destructive: true,
+    );
+    if (!ok || !context.mounted) return;
+    ref.read(demoStoreProvider.notifier).leaveGroupChat(chatId);
+    context.go(Routes.chats);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: _GroupTitle(chatId),
+        actions: [
+          IconButton(
+            tooltip: '참여자',
+            onPressed: () => _openMembers(context, ref),
+            icon: const Icon(Icons.groups_outlined, color: AppColors.heading),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+      ),
+      body: Column(
+        children: [
+          _ReadMarker(chatId),
+          Expanded(child: _MessageList(chatId)),
+          _Composer(chatId: chatId),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupTitle extends ConsumerWidget {
+  const _GroupTitle(this.chatId);
+
+  final String chatId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (title, count) = ref.watch(
+      chatProvider(chatId).select(
+        (c) => (c?.title ?? ChatType.group.label, c?.activeMemberCount ?? 0),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.supportingTitle,
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          '${ChatType.group.label} · $count명',
+          style: AppTypography.caption.copyWith(color: AppColors.primary),
+        ),
       ],
     );
   }
@@ -132,12 +229,29 @@ class _MessageList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 실제 모드: 이 방을 보는 동안만 메시지를 실시간으로 받는다.
     ref.watch(chatMessagesSyncProvider(chatId));
-    final messages = ref.watch(messagesProvider(chatId));
+    final group = ref.watch(
+      chatProvider(chatId).select((c) => c?.isGroup ?? false),
+    );
+    final all = ref.watch(messagesProvider(chatId));
+    // 그룹 채팅: 내가 차단한 사람의 메시지는 숨긴다(1:1은 방 자체가 숨겨진다).
+    final blocked = group
+        ? ref.watch(
+            blocksProvider.select((l) => {for (final b in l) b.targetUid}),
+          )
+        : const <String>{};
+    final messages = blocked.isEmpty
+        ? all
+        : [
+            for (final m in all)
+              if (!blocked.contains(m.senderUid)) m,
+          ];
     if (messages.isEmpty) {
-      return const EmptyState(
-        icon: Icons.waving_hand_outlined,
-        title: '대화가 열렸어요',
-        message: '먼저 인사하고, 지금 어디쯤 있는지 알려주세요.',
+      return EmptyState(
+        icon: group ? Icons.groups_outlined : Icons.waving_hand_outlined,
+        title: group ? '${ChatType.group.label}이 열렸어요' : '대화가 열렸어요',
+        message: group
+            ? '같은 장소 사람들이 들어오면 함께 이야기할 수 있어요. 먼저 인사를 남겨 보세요.'
+            : '먼저 인사하고, 지금 어디쯤 있는지 알려주세요.',
       );
     }
     return ListView.builder(
@@ -149,7 +263,7 @@ class _MessageList extends ConsumerWidget {
       // 맨 위(역순 목록의 마지막)에 시작 안내 한 줄
       itemCount: messages.length + 1,
       itemBuilder: (_, i) {
-        if (i == messages.length) return const _StartedNote();
+        if (i == messages.length) return _StartedNote(group: group);
         final index = messages.length - 1 - i;
         final m = messages[index];
         final prev = index > 0 ? messages[index - 1] : null;
@@ -168,6 +282,7 @@ class _MessageList extends ConsumerWidget {
               mine: m.senderUid == DemoDb.myUid,
               showTime: showTime,
               grouped: prev != null && prev.senderUid == m.senderUid && !newDay,
+              showSender: group,
             ),
           ],
         );
@@ -215,44 +330,6 @@ class _LeftNotice extends StatelessWidget {
   }
 }
 
-class _RetentionBanner extends ConsumerWidget {
-  const _RetentionBanner({required this.chatId});
-
-  final String chatId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final expiresAt = ref.watch(
-      chatProvider(chatId).select((c) => c?.expiresAt),
-    );
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
-      ),
-      color: AppColors.fill,
-      child: Row(
-        children: [
-          const Icon(
-            Icons.auto_delete_outlined,
-            size: 14,
-            color: AppColors.secondary,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              '${AppLimits.chatRetention.inDays}일 뒤 대화가 사라집니다'
-              '${expiresAt == null ? '' : ' · ${TimeFormat.date(expiresAt)}까지 보관'}',
-              style: AppTypography.caption,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _DaySeparator extends StatelessWidget {
   const _DaySeparator(this.date);
 
@@ -273,12 +350,16 @@ class _Bubble extends StatelessWidget {
     required this.mine,
     required this.showTime,
     required this.grouped,
+    this.showSender = false,
   });
 
   final ChatMessage message;
   final bool mine;
   final bool showTime;
   final bool grouped;
+
+  /// 그룹 채팅: 다른 사람이 이어서 보낸 메시지의 첫 말풍선 위에 이름을 단다.
+  final bool showSender;
 
   @override
   Widget build(BuildContext context) {
@@ -311,26 +392,60 @@ class _Bubble extends StatelessWidget {
         ),
       ),
     );
+    final row = Row(
+      mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: mine
+          ? [
+              time,
+              const SizedBox(width: AppSpacing.xs),
+              bubble,
+              const SizedBox(width: 2),
+            ]
+          : [
+              const SizedBox(width: 2),
+              bubble,
+              const SizedBox(width: AppSpacing.xs),
+              time,
+            ],
+    );
+    if (showSender && !mine && !grouped) {
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SenderName(message.senderUid),
+            const SizedBox(height: 4),
+            row,
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: EdgeInsets.only(top: grouped ? 3 : AppSpacing.sm),
-      child: Row(
-        mainAxisAlignment: mine
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: mine
-            ? [
-                time,
-                const SizedBox(width: AppSpacing.xs),
-                bubble,
-                const SizedBox(width: 2),
-              ]
-            : [
-                const SizedBox(width: 2),
-                bubble,
-                const SizedBox(width: AppSpacing.xs),
-                time,
-              ],
+      child: row,
+    );
+  }
+}
+
+/// 그룹 채팅 말풍선 위 보낸 사람 이름(탈퇴했으면 "떠난 사용자")
+class _SenderName extends ConsumerWidget {
+  const _SenderName(this.uid);
+
+  final String uid;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final name = ref.watch(
+      userProvider(uid)
+          .select((u) => u == null || u.deleted ? '떠난 사용자' : u.nickname),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(left: AppSpacing.xs),
+      child: Text(
+        name,
+        style: AppTypography.caption.copyWith(color: AppColors.secondary),
       ),
     );
   }
@@ -434,9 +549,11 @@ class _ComposerState extends ConsumerState<_Composer> {
   }
 }
 
-/// 대화방 맨 위: 요청이 수락되어 시작된 대화라는 안내
+/// 대화방 맨 위: 어떻게 시작된 대화인지 안내
 class _StartedNote extends StatelessWidget {
-  const _StartedNote();
+  const _StartedNote({required this.group});
+
+  final bool group;
 
   @override
   Widget build(BuildContext context) {
@@ -453,7 +570,9 @@ class _StartedNote extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.full),
           ),
           child: Text(
-            '대화 요청이 수락되어 대화가 시작됐어요',
+            group
+                ? '체크인한 주제로 ${ChatType.group.label}이 열렸어요'
+                : '대화 요청이 수락되어 ${ChatType.direct.label}이 시작됐어요',
             style: AppTypography.caption.copyWith(color: AppColors.secondary),
           ),
         ),

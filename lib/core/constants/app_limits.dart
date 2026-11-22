@@ -24,9 +24,6 @@ abstract final class AppLimits {
   /// US-007 요청 무응답 자동 만료
   static const requestExpiry = Duration(minutes: 30);
 
-  /// US-009 / US-012 대화 보관 기간
-  static const chatRetention = Duration(days: 7);
-
   /// 장소 검색(카카오 로컬): 이 글자 수부터 검색한다
   static const placeSearchMinLength = 2;
 
@@ -69,6 +66,9 @@ abstract final class AppLimits {
   static const plusMonthlyPriceWon = 4900;
   static const plusPeriod = Duration(days: 30);
 
-  /// NSM: 양쪽이 각각 이 수 이상 메시지를 보내면 "성사 대화"
+  /// NSM: 양쪽이 각각 이 수 이상 메시지를 보내면 "성사 대화"(1:1 채팅만 센다)
   static const successfulChatMinMessagesEach = 3;
+
+  /// US-025 그룹 채팅 최대 인원(연 사람 포함)
+  static const groupChatMaxMembers = 8;
 }

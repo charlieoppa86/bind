@@ -220,11 +220,14 @@ class DemoDb {
       )
       .length;
 
-  /// 7일이 지나지 않은 대화, 최근 메시지순(US-012)
+  /// 내가 들어 있는 대화, 최근 메시지순(US-012). 보관 기간 제한은 없다.
+  /// 1:1은 상대를 차단하면 숨긴다. 그룹은 남기고 차단한 사람의 메시지만 숨긴다.
   List<Chat> visibleChats(DateTime now) =>
       [
         for (final c in chats)
-          if (c.expiresAt.isAfter(now) && !isBlocked(c.otherUid(myUid))) c,
+          if (c.memberUids.contains(myUid) &&
+              (c.isGroup || !isBlocked(c.otherUid(myUid))))
+            c,
       ]..sort(
         (a, b) => (b.lastMessageAt ?? b.createdAt).compareTo(
           a.lastMessageAt ?? a.createdAt,
@@ -233,11 +236,13 @@ class DemoDb {
 
   Chat? chat(String id) => chats.where((c) => c.id == id).firstOrNull;
 
-  /// 이 사람과 열려 있는 대화방(보관 기간 안)
-  Chat? chatWith(String uid, DateTime now) =>
-      visibleChats(now)
-          .where((c) => c.otherUid(myUid) == uid && !c.leftUids.contains(uid))
-          .firstOrNull;
+  /// 이 사람과 열려 있는 1:1 대화방(보관 기간 안)
+  Chat? chatWith(String uid, DateTime now) => visibleChats(now)
+      .where(
+        (c) =>
+            !c.isGroup && c.otherUid(myUid) == uid && !c.leftUids.contains(uid),
+      )
+      .firstOrNull;
 
   int unreadTotal(DateTime now) =>
       visibleChats(now).fold(0, (sum, c) => sum + (unread[c.id] ?? 0));
@@ -256,6 +261,20 @@ class DemoDb {
 }
 
 enum SendRequestResult { sent, duplicate, dailyLimit, notCheckedIn }
+
+/// 그룹 채팅 참여 결과(US-025)
+enum GroupJoinResult {
+  joined,
+
+  /// 최대 인원([AppLimits.groupChatMaxMembers])이 찼다
+  full,
+
+  /// 나도 같은 장소에 체크인해 있어야 한다
+  notCheckedIn,
+
+  /// 카드가 내려갔거나 볼 수 없는 방
+  gone,
+}
 
 class DemoStore extends Notifier<DemoDb> {
   final _timers = <Timer>[];
@@ -577,6 +596,9 @@ class DemoStore extends Notifier<DemoDb> {
     checkedOutAt: c.checkedOutAt,
     hasTrustBadge: me.hasTrustBadge,
     notifyWhenSomeoneArrives: c.notifyWhenSomeoneArrives,
+    openGroupChat: c.openGroupChat,
+    groupChatId: c.groupChatId,
+    groupMemberCount: c.groupMemberCount,
   );
 
   /// 탈퇴: 데모 데이터를 처음 상태로 되돌리고 로그아웃한다.
@@ -596,18 +618,27 @@ class DemoStore extends Notifier<DemoDb> {
 
   /// 검색해서 고른 장소로 체크인한다. 같은 카카오 장소가 열려 있으면 거기로, 없으면 새로 연다.
   /// 실제 모드: spots/{placeId} 찾기·만들기 + checkins 문서 생성(한 트랜잭션)
+  ///
+  /// [openGroupChat]을 켜면 이 카드로 그룹 채팅도 연다(US-025).
+  /// 실제 모드는 서버(onCheckinWritten)가 방을 만들고 카드에 groupChatId를 적는다.
   void checkIn({
     required Place place,
     required String topic,
     required TopicCategory category,
     String? categoryCustom,
+    bool openGroupChat = false,
   }) {
     final custom = _customFor(category, categoryCustom);
     final me = _db.me!;
     final now = _now;
     final spot = _db.spotByPlaceId(place.id) ?? _openSpot(place, now);
+    final checkinId = _db.nextId('my-checkin');
+    // 데모: 서버 대신 그룹 채팅방을 바로 만든다.
+    final groupChatId = openGroupChat && !_live
+        ? _openGroupChatLocal(checkinId, topic.trim(), now)
+        : null;
     final checkin = Checkin(
-      id: _db.nextId('my-checkin'),
+      id: checkinId,
       uid: DemoDb.myUid,
       spotId: spot.id,
       nickname: me.nickname,
@@ -618,6 +649,9 @@ class DemoStore extends Notifier<DemoDb> {
       categoryCustom: custom,
       startedAt: now,
       hasTrustBadge: me.hasTrustBadge,
+      openGroupChat: openGroupChat,
+      groupChatId: groupChatId,
+      groupMemberCount: groupChatId == null ? 0 : 1,
     );
     _db.checkins.add(checkin);
     _rememberTopic(topic.trim(), category);
@@ -627,7 +661,12 @@ class DemoStore extends Notifier<DemoDb> {
     if (_db.recentSpotIds.length > AppLimits.recentPlacesCount) {
       _db.recentSpotIds.removeLast();
     }
-    _commit({DemoPart.checkins, DemoPart.places, DemoPart.topics});
+    _commit({
+      DemoPart.checkins,
+      DemoPart.places,
+      DemoPart.topics,
+      if (groupChatId != null) DemoPart.chats,
+    });
     _session.checkedIn(checkinId: checkin.id, spotId: spot.id);
     if (_live) {
       _remote(
@@ -638,12 +677,80 @@ class DemoStore extends Notifier<DemoDb> {
           topic: topic.trim(),
           category: category,
           categoryCustom: custom,
+          openGroupChat: openGroupChat,
         ),
         onFail: () => _checkOutLocal(checkin.id),
       );
     } else {
       _scheduleIncoming(checkin);
+      if (groupChatId != null) _scheduleGroupJoiners(checkin);
     }
+  }
+
+  /// 데모: 내 카드로 그룹 채팅방을 연다(나 혼자 시작). 방 id를 돌려준다.
+  String _openGroupChatLocal(String checkinId, String topic, DateTime now) {
+    final id = _db.nextId('group');
+    _db.chats.add(
+      Chat(
+        id: id,
+        type: ChatType.group,
+        title: topic,
+        ownerUid: DemoDb.myUid,
+        checkinId: checkinId,
+        memberUids: const [DemoDb.myUid],
+        createdAt: now,
+      ),
+    );
+    _db.messages[id] = [];
+    _db.unread[id] = 0;
+    return id;
+  }
+
+  /// 데모: 내가 연 그룹 채팅에 같은 장소 사람이 몇 초 뒤 들어와 인사한다.
+  void _scheduleGroupJoiners(Checkin mine) {
+    final chatId = mine.groupChatId!;
+    for (final (uid, text, delay) in DemoSeed.groupJoiners) {
+      if (!_db.feed(mine.spotId, _now).any((c) => c.uid == uid)) continue;
+      _later(delay, () {
+        final card = _db.checkin(mine.id);
+        final chat = _db.chat(chatId);
+        if (card == null ||
+            !card.isActiveAt(_now) ||
+            chat == null ||
+            _db.isBlocked(uid) ||
+            chat.memberUids.contains(uid) ||
+            chat.activeMemberCount >= AppLimits.groupChatMaxMembers) {
+          return;
+        }
+        _addGroupMember(chatId, uid);
+        _partnerSays(chatId, text, from: uid);
+        _notice(
+          '${_nicknameOf(uid)}님이 그룹 채팅에 들어왔어요',
+          actionLabel: '보기',
+          route: Routes.chatRoom(chatId),
+        );
+      });
+    }
+  }
+
+  /// 그룹 채팅방에 [uid]를 넣고, 방을 연 카드의 인원 수를 맞춘다.
+  void _addGroupMember(String chatId, String uid) {
+    final i = _db.chats.indexWhere((c) => c.id == chatId);
+    if (i < 0) return;
+    final chat = _db.chats[i];
+    if (chat.memberUids.contains(uid)) return;
+    _db.chats[i] = chat.copyWith(memberUids: [...chat.memberUids, uid]);
+    _syncGroupCount(_db.chats[i]);
+    _commit({DemoPart.chats, DemoPart.checkins});
+  }
+
+  /// 방을 연 카드에 적힌 인원 수(피드에서 보이는 값)를 방과 맞춘다.
+  void _syncGroupCount(Chat chat) {
+    final i = _db.checkins.indexWhere((c) => c.groupChatId == chat.id);
+    if (i < 0) return;
+    _db.checkins[i] = _db.checkins[i].copyWith(
+      groupMemberCount: chat.activeMemberCount,
+    );
   }
 
   /// 서버 저장에 실패한 카드를 화면에서 내린다.
@@ -722,7 +829,13 @@ class DemoStore extends Notifier<DemoDb> {
       categoryCustom: () => custom,
     );
     _rememberTopic(topic.trim(), category);
-    _commit({DemoPart.checkins, DemoPart.topics});
+    // 그룹 채팅 이름은 카드 주제를 따른다(실제 모드는 onCheckinWritten이 바꾼다).
+    final groupId = _db.checkins[i].groupChatId;
+    final g = groupId == null
+        ? -1
+        : _db.chats.indexWhere((c) => c.id == groupId);
+    if (g >= 0) _db.chats[g] = _db.chats[g].copyWith(title: topic.trim());
+    _commit({DemoPart.checkins, DemoPart.topics, if (g >= 0) DemoPart.chats});
     _remote(
       (repo, _) => repo.updateTopic(
         checkinId,
@@ -942,7 +1055,6 @@ class DemoStore extends Notifier<DemoDb> {
           id: chatId,
           memberUids: [r.fromUid, DemoDb.myUid],
           createdAt: now,
-          expiresAt: now.add(AppLimits.chatRetention),
           lastMessage: r.message,
           lastMessageAt: now,
         ),
@@ -1053,7 +1165,6 @@ class DemoStore extends Notifier<DemoDb> {
         id: id,
         memberUids: [DemoDb.myUid, otherUid],
         createdAt: now,
-        expiresAt: now.add(AppLimits.chatRetention),
         lastMessage: firstMessage,
         lastMessageAt: now,
       ),
@@ -1107,7 +1218,6 @@ class DemoStore extends Notifier<DemoDb> {
             chatId: chatId,
             uid: uid,
             text: text.trim(),
-            expiresAt: chat.expiresAt,
           )
           .catchError((Object e) {
             debugPrint('[BIND] 메시지 전송 실패: $e');
@@ -1115,17 +1225,36 @@ class DemoStore extends Notifier<DemoDb> {
           });
       return;
     }
+    final reply = DemoSeed.replies[_replyCursor % DemoSeed.replies.length];
+    if (chat.isGroup) {
+      // 그룹: 남아 있는 다른 사람이 돌아가며 답한다.
+      final others = [
+        for (final u in chat.memberUids)
+          if (u != DemoDb.myUid &&
+              !chat.leftUids.contains(u) &&
+              !_db.isBlocked(u))
+            u,
+      ];
+      if (others.isEmpty) return;
+      final from = others[_replyCursor++ % others.length];
+      _later(
+        DemoSeed.replyDelay,
+        () => _partnerSays(chatId, reply, from: from),
+      );
+      return;
+    }
     final other = chat.otherUid(DemoDb.myUid);
     if (chat.leftUids.contains(other)) return;
-    final reply = DemoSeed.replies[_replyCursor++ % DemoSeed.replies.length];
+    _replyCursor++;
     _later(DemoSeed.replyDelay, () => _partnerSays(chatId, reply));
   }
 
-  void _partnerSays(String chatId, String text) {
+  /// 데모 상대가 말한다. [from]이 없으면 1:1 상대.
+  void _partnerSays(String chatId, String text, {String? from}) {
     final chat = _db.chat(chatId);
     if (chat == null) return;
-    final other = chat.otherUid(DemoDb.myUid);
-    if (_db.isBlocked(other)) return;
+    final other = from ?? chat.otherUid(DemoDb.myUid);
+    if (_db.isBlocked(other) || !chat.memberUids.contains(other)) return;
     _append(chatId, other, text);
     _db.unread[chatId] = (_db.unread[chatId] ?? 0) + 1;
     _commit({DemoPart.chats}, chatId: chatId);
@@ -1160,7 +1289,8 @@ class DemoStore extends Notifier<DemoDb> {
   bool shouldAskReview(String chatId) {
     if (_db.reviewAsked.contains(chatId)) return false;
     final chat = _db.chat(chatId);
-    if (chat == null) return false;
+    // 평가는 1:1 상대에게만(그룹 채팅은 묻지 않는다)
+    if (chat == null || chat.isGroup) return false;
     final msgs = _db.messages[chatId] ?? const [];
     return msgs.any((m) => m.senderUid == DemoDb.myUid) &&
         msgs.any((m) => m.senderUid != DemoDb.myUid);
@@ -1196,6 +1326,98 @@ class DemoStore extends Notifier<DemoDb> {
       }
     }
     _commit({DemoPart.chats});
+  }
+
+  // ── 그룹 채팅(US-025) ───────────────────────────────
+
+  /// 카드에 열린 그룹 채팅에 들어간다. 들어가면 방 id도 돌려준다.
+  /// 실제 모드는 서버(joinGroupChat)가 같은 장소·차단·인원을 다시 확인한다.
+  Future<(GroupJoinResult, String?)> joinGroupChat(Checkin target) async {
+    final now = _now;
+    final chatId = target.groupChatId;
+    if (_db.myCheckins(now).isEmpty) {
+      return (GroupJoinResult.notCheckedIn, null);
+    }
+    if (chatId == null || _db.isBlocked(target.uid)) {
+      return (GroupJoinResult.gone, null);
+    }
+    if (!_live) return _joinGroupLocal(target, chatId);
+
+    final (remote, joinedId) = await ref
+        .read(requestRepositoryProvider)
+        .joinGroupChat(target.id);
+    final result = switch (remote) {
+      RemoteJoinResult.joined => GroupJoinResult.joined,
+      RemoteJoinResult.full => GroupJoinResult.full,
+      RemoteJoinResult.notCheckedIn => GroupJoinResult.notCheckedIn,
+      RemoteJoinResult.gone => GroupJoinResult.gone,
+    };
+    if (result != GroupJoinResult.joined || joinedId == null) {
+      return (result, null);
+    }
+    // 서버 목록이 오기 전에 화면에 먼저 넣는다(바로 대화방으로 들어가도록).
+    final existing = _db.chat(joinedId);
+    if (existing == null) {
+      _db.chats.add(
+        Chat(
+          id: joinedId,
+          type: ChatType.group,
+          title: target.topic,
+          ownerUid: target.uid,
+          checkinId: target.id,
+          memberUids: [target.uid, DemoDb.myUid],
+          createdAt: now,
+        ),
+      );
+      _db.unread[joinedId] = 0;
+      _commit({DemoPart.chats});
+    } else {
+      _addGroupMember(joinedId, DemoDb.myUid);
+    }
+    return (GroupJoinResult.joined, joinedId);
+  }
+
+  (GroupJoinResult, String?) _joinGroupLocal(Checkin target, String chatId) {
+    final chat = _db.chat(chatId);
+    final card = _db.checkin(target.id);
+    if (chat == null || card == null || !card.isActiveAt(_now)) {
+      return (GroupJoinResult.gone, null);
+    }
+    if (chat.memberUids.contains(DemoDb.myUid)) {
+      return (GroupJoinResult.joined, chatId);
+    }
+    if (chat.activeMemberCount >= AppLimits.groupChatMaxMembers) {
+      return (GroupJoinResult.full, null);
+    }
+    _db.unread[chatId] = 0;
+    _addGroupMember(chatId, DemoDb.myUid);
+    final owner = chat.ownerUid;
+    if (owner != null) {
+      _later(
+        DemoSeed.replyDelay,
+        () => _partnerSays(chatId, DemoSeed.groupWelcome, from: owner),
+      );
+    }
+    return (GroupJoinResult.joined, chatId);
+  }
+
+  /// 그룹 채팅에서 나간다. 방은 남은 사람끼리 이어진다.
+  void leaveGroupChat(String chatId) {
+    final i = _db.chats.indexWhere((c) => c.id == chatId);
+    if (i < 0 || !_db.chats[i].isGroup) return;
+    final chat = _db.chats[i];
+    _db.chats[i] = chat.copyWith(
+      memberUids: [
+        for (final u in chat.memberUids)
+          if (u != DemoDb.myUid) u,
+      ],
+    );
+    _db.unread.remove(chatId);
+    _syncGroupCount(_db.chats[i]);
+    _commit({DemoPart.chats, DemoPart.checkins});
+    _liveWrite(
+      (_) => ref.read(requestRepositoryProvider).leaveGroupChat(chatId),
+    );
   }
 
   // ── 신고·차단 ───────────────────────────────────────

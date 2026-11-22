@@ -67,6 +67,7 @@ class CheckinRepository {
     required String topic,
     required TopicCategory category,
     String? categoryCustom,
+    bool openGroupChat = false,
   }) async {
     final spotRef = _spots.doc(place.id);
     await _db.runTransaction((tx) async {
@@ -85,7 +86,15 @@ class CheckinRepository {
       }
       tx.set(
         _checkins.doc(),
-        _newCard(uid, me, place.id, topic, category, categoryCustom),
+        _newCard(
+          uid,
+          me,
+          place.id,
+          topic,
+          category,
+          categoryCustom,
+          openGroupChat: openGroupChat,
+        ),
       );
     });
   }
@@ -164,8 +173,9 @@ class CheckinRepository {
     String spotId,
     String topic,
     TopicCategory category,
-    String? categoryCustom,
-  ) => {
+    String? categoryCustom, {
+    bool openGroupChat = false,
+  }) => {
     'uid': uid,
     'spotId': spotId,
     'nickname': me.nickname,
@@ -178,6 +188,8 @@ class CheckinRepository {
     'checkedOutAt': null,
     'hasTrustBadge': me.hasTrustBadge,
     'notifyWhenSomeoneArrives': false,
+    // true면 서버(onCheckinWritten)가 그룹 채팅방을 만들고 groupChatId를 적는다.
+    'openGroupChat': openGroupChat,
   };
 
   static List<Checkin> _toCheckins(QuerySnapshot<Map<String, dynamic>> s) => [
