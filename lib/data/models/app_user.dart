@@ -18,6 +18,8 @@ class AppUser {
     this.suspended = false,
     this.deleted = false,
     this.onboardingGuideSeen = false,
+    this.ageBand,
+    this.gender,
   });
 
   factory AppUser.fromMap(String uid, Map<String, dynamic> map) => AppUser(
@@ -32,6 +34,8 @@ class AppUser {
     suspended: map['suspended'] as bool? ?? false,
     deleted: map['deleted'] as bool? ?? false,
     onboardingGuideSeen: map['onboardingGuideSeen'] as bool? ?? false,
+    ageBand: _enumOrNull(AgeBand.values, map['ageBand']),
+    gender: _enumOrNull(Gender.values, map['gender']),
   );
 
   final String uid;
@@ -59,6 +63,16 @@ class AppUser {
   final bool deleted;
   final bool onboardingGuideSeen;
 
+  /// 마지막 체크인 때 고른 연령대·성별. 다음 체크인에 미리 채운다(카드에도 보인다).
+  final AgeBand? ageBand;
+  final Gender? gender;
+
+  /// "30대 · 여성"(아직 체크인 전이면 빈 문자열)
+  String get demographicLabel => demographicLabelOf(ageBand, gender);
+
+  static T? _enumOrNull<T extends Enum>(List<T> values, Object? name) =>
+      values.where((v) => v.name == name).firstOrNull;
+
   bool get hasTrustBadge => goodReviewCount >= AppLimits.trustBadgeThreshold;
   bool get isOnboarded => nickname.isNotEmpty && consentedAt != null;
 
@@ -73,6 +87,8 @@ class AppUser {
     bool? suspended,
     bool? deleted,
     bool? onboardingGuideSeen,
+    AgeBand? ageBand,
+    Gender? gender,
   }) => AppUser(
     uid: uid,
     nickname: nickname ?? this.nickname,
@@ -85,6 +101,8 @@ class AppUser {
     suspended: suspended ?? this.suspended,
     deleted: deleted ?? this.deleted,
     onboardingGuideSeen: onboardingGuideSeen ?? this.onboardingGuideSeen,
+    ageBand: ageBand ?? this.ageBand,
+    gender: gender ?? this.gender,
   );
 
   Map<String, dynamic> toMap() => {

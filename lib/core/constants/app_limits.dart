@@ -70,5 +70,5 @@ abstract final class AppLimits {
   static const successfulChatMinMessagesEach = 3;
 
   /// US-025 그룹 채팅 최대 인원(연 사람 포함)
-  static const groupChatMaxMembers = 8;
+  static const groupChatMaxMembers = 20;
 }

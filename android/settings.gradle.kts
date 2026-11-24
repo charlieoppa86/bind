@@ -22,6 +22,8 @@ plugins {
     id("com.android.application") version "9.3.1" apply false
     // START: FlutterFire Configuration
     id("com.google.gms.google-services") version("4.4.4") apply false
+    // Crashlytics: 출시 빌드의 R8 매핑 파일을 올려 크래시 위치를 읽을 수 있게 한다.
+    id("com.google.firebase.crashlytics") version("3.0.8") apply false
     // END: FlutterFire Configuration
     id("org.jetbrains.kotlin.android") version "2.4.20" apply false
 }

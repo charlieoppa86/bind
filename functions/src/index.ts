@@ -266,7 +266,7 @@ export const onCheckinWritten = onDocumentWritten(
 
 // ── 그룹 채팅(US-025) ─────────────────────────────────
 
-const GROUP_CHAT_MAX = 8; // AppLimits.groupChatMaxMembers
+const GROUP_CHAT_MAX = 20; // AppLimits.groupChatMaxMembers
 
 /** 카드로 그룹 채팅방을 만들고 카드에 방 id를 적는다(트리거가 두 번 돌아도 한 번만). */
 async function openGroupChat(checkinId: string): Promise<void> {
@@ -358,6 +358,8 @@ export const joinGroupChat = onCall(async (request) => {
       [`unread.${uid}`]: 0,
     });
     tx.update(cardRef, { groupMemberCount: members.length + 1 });
+    // 방 안에 "○○님이 입장했습니다" 안내(onMessageCreated가 다른 참여자에게 알린다)
+    tx.set(chatRef.collection("messages").doc(), groupNotice(uid, me.nickname, "join"));
     return "joined";
   });
   return result === "joined" ? { result, chatId } : { result };
@@ -372,6 +374,7 @@ export const leaveGroupChat = onCall(async (request) => {
 
   const db = getFirestore();
   const chatRef = db.collection("chats").doc(chatId);
+  const nickname = await nicknameOf(uid);
   await db.runTransaction(async (tx) => {
     const chat = (await tx.get(chatRef)).data();
     if (!chat || chat.type !== "group" || !(chat.memberUids as string[]).includes(uid)) return;
@@ -388,9 +391,25 @@ export const leaveGroupChat = onCall(async (request) => {
         groupMemberCount: activeMembers(chat).filter((u) => u !== uid).length,
       });
     }
+    // 남은 사람에게 "○○님이 나갔습니다" 안내(푸시는 보내지 않는다)
+    tx.set(chatRef.collection("messages").doc(), groupNotice(uid, nickname, "leave"));
   });
   return { ok: true };
 });
+
+/**
+ * 그룹 채팅 입장·퇴장 안내 메시지(kind: join/leave). 보낸 사람은 들어오거나 나간 사람이라
+ * 그 사람이 탈퇴하면 deleteAccount가 다른 메시지와 함께 지운다. 클라이언트는 kind를 쓸 수 없다.
+ */
+function groupNotice(uid: string, nickname: unknown, kind: "join" | "leave") {
+  const name = String(nickname ?? "") || "누군가";
+  return {
+    senderUid: uid,
+    kind,
+    text: kind === "join" ? `${name}님이 입장했습니다` : `${name}님이 나갔습니다`,
+    sentAt: FieldValue.serverTimestamp(),
+  };
+}
 
 // ── 푸시 알림(FCM) ─────────────────────────────────────
 
@@ -751,6 +770,16 @@ export const onMessageCreated = onDocumentCreated(
     const sender = msg.senderUid as string;
     const db = getFirestore();
     const chatRef = db.collection("chats").doc(event.params.chatId);
+    // 입장·퇴장 안내: 목록 미리보기만 바꾸고 안 읽은 수·메시지 수·성사 대화에는 넣지 않는다.
+    // 입장은 다른 참여자에게 푸시로 알린다.
+    if (msg.kind === "join" || msg.kind === "leave") {
+      await chatRef.update({
+        lastMessage: msg.text,
+        lastMessageAt: msg.sentAt ?? FieldValue.serverTimestamp(),
+      });
+      if (msg.kind === "join") await notifyJoined(event.params.chatId, sender, msg.text);
+      return;
+    }
     await db.runTransaction(async (tx) => {
       const chat = (await tx.get(chatRef)).data();
       if (!chat) return;
@@ -801,6 +830,28 @@ export const onMessageCreated = onDocumentCreated(
     );
   },
 );
+
+/** 그룹 채팅에 누가 들어오면 다른 참여자에게 알린다(나를 차단한 사람은 제외). */
+async function notifyJoined(chatId: string, newcomer: string, text: string): Promise<void> {
+  const chat = (await getFirestore().collection("chats").doc(chatId).get()).data();
+  if (!chat) return;
+  const left = (chat.leftUids as string[] | undefined) ?? [];
+  const others = (chat.memberUids as string[]).filter(
+    (u) => u !== newcomer && !left.includes(u),
+  );
+  await Promise.all(
+    others.map(async (o) => {
+      if (await blocked(o, newcomer)) return;
+      await pushToUser(o, {
+        type: "joined",
+        title: String(chat.title ?? "그룹 채팅"),
+        body: text,
+        route: `/chats/${chatId}`,
+        collapseKey: `chat_${chatId}`,
+      });
+    }),
+  );
+}
 
 // ── 2-4. 신고·평가 ────────────────────────────────────
 

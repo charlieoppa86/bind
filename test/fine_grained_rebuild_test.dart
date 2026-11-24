@@ -28,6 +28,8 @@ void main() {
         place: DemoSeed.places[0],
         topic: '테스트 주제',
         category: TopicCategory.dev,
+        ageBand: AgeBand.thirties,
+        gender: Gender.female,
       );
   });
   tearDown(() => container.dispose());

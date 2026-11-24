@@ -27,6 +27,8 @@ void main() {
       place: DemoSeed.places[0],
       topic: '테스트 주제',
       category: TopicCategory.dev,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
     );
     expect(container.read(sessionProvider).isCheckedIn, isTrue);
     expect(db().feed('seongsu', DateTime.now()), isNotEmpty);
@@ -38,6 +40,8 @@ void main() {
       place: DemoSeed.places[2],
       topic: '테스트',
       category: TopicCategory.other,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
     );
     final feed = db().feed('pangyo-conf', DateTime.now());
     expect(store().sendRequest(feed[0], '안녕하세요'), SendRequestResult.sent);
@@ -59,6 +63,8 @@ void main() {
       place: DemoSeed.places[0],
       topic: '테스트',
       category: TopicCategory.other,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
     );
     final target = db().feed('seongsu', DateTime.now()).first.uid;
     store().block(target);
@@ -100,6 +106,8 @@ void main() {
       place: rooftop,
       topic: '테스트',
       category: TopicCategory.other,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
     );
     final spot = db().spotByPlaceId(rooftop.id)!;
     expect(spot.name, '성수 루프탑 카페');
@@ -116,6 +124,8 @@ void main() {
       place: DemoSeed.places[0],
       topic: '테스트',
       category: TopicCategory.other,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
     );
     final later = DateTime.now().add(const Duration(days: 1));
     expect(db().myCheckins(later), hasLength(1));
@@ -130,6 +140,8 @@ void main() {
       place: DemoSeed.places[0],
       topic: '테스트',
       category: TopicCategory.other,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
     );
     expect(db().myCheckins(DateTime.now()).single.jobLabel, '바리스타');
     // 기타가 아닌 태그로 바꾸면 직접 입력값은 지워진다
@@ -138,12 +150,57 @@ void main() {
     expect(db().me!.jobLabel, '셰프·요리');
   });
 
-  test('키워드는 24개, 기타를 고르면 직접 입력한 키워드가 카드에 보인다', () {
-    expect(TopicCategory.values, hasLength(24));
+  test('연령대·성별은 카드에 보이고, 프로필에 남아 다음 체크인에 미리 채운다', () {
+    expect(db().me!.ageBand, isNull);
+    store().checkIn(
+      place: DemoSeed.places[0],
+      topic: '연령 성별 확인',
+      category: TopicCategory.smallTalk,
+      ageBand: AgeBand.forties,
+      gender: Gender.male,
+    );
+    final card = db().myCheckins(DateTime.now()).single;
+    expect(card.demographicLabel, '40대 · 남성');
+    expect(card.profileLabel, startsWith('40대 · 남성'));
+    expect(db().me!.ageBand, AgeBand.forties);
+    expect(db().me!.gender, Gender.male);
+    // 같은 장소 다른 사람 카드에도 보인다
+    final other = db().feed('seongsu', DateTime.now()).first;
+    expect(other.demographicLabel, isNotEmpty);
+  });
+
+  test('그룹 채팅에서 나가면 "○○님이 나갔습니다" 안내가 남는다', () {
+    const groupId = 'group-hana';
+    store().checkIn(
+      place: DemoSeed.places[0],
+      topic: '그룹 나가기 확인',
+      category: TopicCategory.smallTalk,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
+    );
+    final card = db()
+        .feed('seongsu', DateTime.now())
+        .firstWhere((c) => c.groupChatId == groupId);
+    store().joinGroupChat(card);
+    store().leaveGroupChat(groupId);
+    final notices = [
+      for (final m in db().messages[groupId]!)
+        if (m.kind.isNotice) m.text,
+    ];
+    final me = db().me!.nickname;
+    expect(notices, ['$me님이 입장했습니다', '$me님이 나갔습니다']);
+    // 안내는 안 읽은 수·메시지 수에 들어가지 않는다
+    expect(db().chat(groupId)!.messageCounts[DemoDb.myUid], isNull);
+  });
+
+  test('키워드는 35개(커리어 12·일상 12·스터디 11), 기타를 고르면 직접 입력한 키워드가 카드에 보인다', () {
+    expect(TopicCategory.values, hasLength(35));
     store().checkIn(
       place: DemoSeed.places[0],
       topic: '사진 같이 찍어요',
       category: TopicCategory.other,
+      ageBand: AgeBand.thirties,
+      gender: Gender.female,
       categoryCustom: ' 사진 ',
     );
     final card = db().myCheckins(DateTime.now()).single;

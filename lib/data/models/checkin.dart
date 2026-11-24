@@ -3,7 +3,7 @@ import 'firestore_utils.dart';
 
 /// `checkins/{checkinId}` — 스팟 피드에 노출되는 "주제 카드".
 ///
-/// 카드에는 닉네임·직무·주제만 보인다(US-006).
+/// 카드에는 닉네임·하는 일·연령대·성별·주제·키워드가 보인다(US-006).
 /// 피드 조회 시 닉네임/직무를 매번 조인하지 않도록 비정규화해 둔다.
 class Checkin {
   const Checkin({
@@ -23,6 +23,8 @@ class Checkin {
     this.openGroupChat = false,
     this.groupChatId,
     this.groupMemberCount = 0,
+    this.ageBand,
+    this.gender,
   });
 
   factory Checkin.fromMap(String id, Map<String, dynamic> map) => Checkin(
@@ -46,6 +48,8 @@ class Checkin {
     openGroupChat: map['openGroupChat'] as bool? ?? false,
     groupChatId: map['groupChatId'] as String?,
     groupMemberCount: (map['groupMemberCount'] as num?)?.toInt() ?? 0,
+    ageBand: AgeBand.values.where((v) => v.name == map['ageBand']).firstOrNull,
+    gender: Gender.values.where((v) => v.name == map['gender']).firstOrNull,
   );
 
   final String id;
@@ -85,6 +89,18 @@ class Checkin {
 
   bool get hasGroupChat => groupChatId != null;
 
+  /// 체크인할 때 고른 연령대·성별(필수). 이전 앱이 올린 카드는 없을 수 있다.
+  final AgeBand? ageBand;
+  final Gender? gender;
+
+  /// 카드에 보이는 "30대 · 여성"
+  String get demographicLabel => demographicLabelOf(ageBand, gender);
+
+  /// 닉네임 아래 한 줄: "30대 · 여성 · 개발자". 좁으면 하는 일 끝이 줄어들도록
+  /// 연령대·성별을 앞에 둔다.
+  String get profileLabel =>
+      [demographicLabel, jobLabel].where((s) => s.isNotEmpty).join(' · ');
+
   /// 체류 시간 제한이 없다. 체크아웃 전까지 보인다.
   bool isActiveAt(DateTime now) => checkedOutAt == null;
 
@@ -106,6 +122,8 @@ class Checkin {
     openGroupChat: openGroupChat,
     groupChatId: groupChatId,
     groupMemberCount: groupMemberCount,
+    ageBand: ageBand,
+    gender: gender,
   );
 
   Checkin copyWith({
@@ -136,6 +154,8 @@ class Checkin {
     openGroupChat: openGroupChat,
     groupChatId: groupChatId ?? this.groupChatId,
     groupMemberCount: groupMemberCount ?? this.groupMemberCount,
+    ageBand: ageBand,
+    gender: gender,
   );
 
   Map<String, dynamic> toMap() => {
@@ -151,5 +171,7 @@ class Checkin {
     'checkedOutAt': toTimestamp(checkedOutAt),
     'notifyWhenSomeoneArrives': notifyWhenSomeoneArrives,
     'openGroupChat': openGroupChat,
+    'ageBand': ?ageBand?.name,
+    'gender': ?gender?.name,
   };
 }

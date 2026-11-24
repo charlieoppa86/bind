@@ -102,9 +102,18 @@ class RequestDetailScreen extends ConsumerWidget {
                           const SizedBox(height: 2),
                           Row(
                             children: [
-                              Text(
-                                r.fromJobLabel,
-                                style: AppTypography.caption,
+                              Flexible(
+                                child: Text(
+                                  [
+                                    r.fromJobLabel,
+                                    ref.watch(
+                                      userProvider(r.fromUid).select(
+                                        (u) => u?.demographicLabel ?? '',
+                                      ),
+                                    ),
+                                  ].where((s) => s.isNotEmpty).join(' · '),
+                                  style: AppTypography.caption,
+                                ),
                               ),
                               if (trusted) ...[
                                 const SizedBox(width: AppSpacing.sm),

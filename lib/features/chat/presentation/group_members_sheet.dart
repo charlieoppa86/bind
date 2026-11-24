@@ -103,7 +103,17 @@ class _MemberRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final (name, job) = ref.watch(
-      userProvider(uid).select((u) => (u?.nickname ?? '', u?.jobLabel)),
+      userProvider(uid).select(
+        (u) => (
+          u?.nickname ?? '',
+          u == null
+              ? null
+              : [
+                  u.jobLabel,
+                  u.demographicLabel,
+                ].where((s) => s.isNotEmpty).join(' · '),
+        ),
+      ),
     );
     final me = uid == DemoDb.myUid;
     return Padding(

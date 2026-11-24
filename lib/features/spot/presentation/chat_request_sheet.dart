@@ -184,9 +184,12 @@ class _ChatRequestSheetState extends ConsumerState<ChatRequestSheet> {
                         children: [
                           Text(target.nickname, style: AppTypography.title),
                           const SizedBox(width: AppSpacing.xs),
-                          Text(
-                            '· ${target.jobLabel}',
-                            style: AppTypography.caption,
+                          Flexible(
+                            child: Text(
+                              '· ${target.profileLabel}',
+                              style: AppTypography.caption,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           if (target.hasTrustBadge) ...[
                             const SizedBox(width: AppSpacing.xs),

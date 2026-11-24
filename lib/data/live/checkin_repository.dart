@@ -60,6 +60,7 @@ class CheckinRepository {
   }
 
   /// 장소가 없으면 만들고, 그 장소에 내 주제 카드를 올린다(한 번에).
+  /// [me]의 연령대·성별은 카드에 넣고, 다음 체크인에 미리 채우도록 프로필에도 남긴다.
   Future<void> checkIn({
     required String uid,
     required AppUser me,
@@ -96,6 +97,10 @@ class CheckinRepository {
           openGroupChat: openGroupChat,
         ),
       );
+      tx.update(_db.collection('users').doc(uid), {
+        'ageBand': me.ageBand?.name,
+        'gender': me.gender?.name,
+      });
     });
   }
 
@@ -190,6 +195,9 @@ class CheckinRepository {
     'notifyWhenSomeoneArrives': false,
     // true면 서버(onCheckinWritten)가 그룹 채팅방을 만들고 groupChatId를 적는다.
     'openGroupChat': openGroupChat,
+    // 카드에 보이는 연령대·성별(체크인 때 필수로 고른 값)
+    'ageBand': me.ageBand?.name,
+    'gender': me.gender?.name,
   };
 
   static List<Checkin> _toCheckins(QuerySnapshot<Map<String, dynamic>> s) => [

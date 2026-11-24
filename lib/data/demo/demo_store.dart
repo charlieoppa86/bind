@@ -519,6 +519,8 @@ class DemoStore extends Notifier<DemoDb> {
             plusExpiresAt: profile.plusExpiresAt,
             suspended: profile.suspended,
             onboardingGuideSeen: profile.onboardingGuideSeen,
+            ageBand: profile.ageBand,
+            gender: profile.gender,
           );
     _commit({DemoPart.profile});
   }
@@ -599,6 +601,8 @@ class DemoStore extends Notifier<DemoDb> {
     openGroupChat: c.openGroupChat,
     groupChatId: c.groupChatId,
     groupMemberCount: c.groupMemberCount,
+    ageBand: c.ageBand,
+    gender: c.gender,
   );
 
   /// 탈퇴: 데모 데이터를 처음 상태로 되돌리고 로그아웃한다.
@@ -621,15 +625,20 @@ class DemoStore extends Notifier<DemoDb> {
   ///
   /// [openGroupChat]을 켜면 이 카드로 그룹 채팅도 연다(US-025).
   /// 실제 모드는 서버(onCheckinWritten)가 방을 만들고 카드에 groupChatId를 적는다.
+  ///
+  /// [ageBand]·[gender]는 필수로 카드에 보이고, 프로필에 남겨 다음 체크인에 미리 채운다.
   void checkIn({
     required Place place,
     required String topic,
     required TopicCategory category,
+    required AgeBand ageBand,
+    required Gender gender,
     String? categoryCustom,
     bool openGroupChat = false,
   }) {
     final custom = _customFor(category, categoryCustom);
-    final me = _db.me!;
+    final me = _db.me!.copyWith(ageBand: ageBand, gender: gender);
+    _db.me = me;
     final now = _now;
     final spot = _db.spotByPlaceId(place.id) ?? _openSpot(place, now);
     final checkinId = _db.nextId('my-checkin');
@@ -652,6 +661,8 @@ class DemoStore extends Notifier<DemoDb> {
       openGroupChat: openGroupChat,
       groupChatId: groupChatId,
       groupMemberCount: groupChatId == null ? 0 : 1,
+      ageBand: ageBand,
+      gender: gender,
     );
     _db.checkins.add(checkin);
     _rememberTopic(topic.trim(), category);
@@ -662,6 +673,7 @@ class DemoStore extends Notifier<DemoDb> {
       _db.recentSpotIds.removeLast();
     }
     _commit({
+      DemoPart.profile,
       DemoPart.checkins,
       DemoPart.places,
       DemoPart.topics,
@@ -734,6 +746,7 @@ class DemoStore extends Notifier<DemoDb> {
   }
 
   /// 그룹 채팅방에 [uid]를 넣고, 방을 연 카드의 인원 수를 맞춘다.
+  /// 데모는 "○○님이 입장했습니다" 안내도 넣는다(실제 모드는 서버 joinGroupChat이 쓴다).
   void _addGroupMember(String chatId, String uid) {
     final i = _db.chats.indexWhere((c) => c.id == chatId);
     if (i < 0) return;
@@ -741,7 +754,30 @@ class DemoStore extends Notifier<DemoDb> {
     if (chat.memberUids.contains(uid)) return;
     _db.chats[i] = chat.copyWith(memberUids: [...chat.memberUids, uid]);
     _syncGroupCount(_db.chats[i]);
+    if (!_live) _appendNotice(chatId, uid, MessageKind.join);
     _commit({DemoPart.chats, DemoPart.checkins});
+  }
+
+  /// 그룹 채팅 입장·퇴장 안내. 안 읽은 수·메시지 수에는 넣지 않고 목록 미리보기만 바꾼다.
+  void _appendNotice(String chatId, String uid, MessageKind kind) {
+    final now = _now;
+    final text = ChatMessage.noticeText(kind, _nicknameOf(uid));
+    _db.messages
+        .putIfAbsent(chatId, () => [])
+        .add(
+          ChatMessage(
+            id: _db.nextId('notice'),
+            senderUid: uid,
+            text: text,
+            sentAt: now,
+            kind: kind,
+          ),
+        );
+    final i = _db.chats.indexWhere((c) => c.id == chatId);
+    if (i >= 0) {
+      _db.chats[i] = _db.chats[i].copyWith(lastMessage: text, lastMessageAt: now);
+    }
+    _commit({DemoPart.chats}, chatId: chatId);
   }
 
   /// 방을 연 카드에 적힌 인원 수(피드에서 보이는 값)를 방과 맞춘다.
@@ -798,6 +834,9 @@ class DemoStore extends Notifier<DemoDb> {
         categoryCustom: custom,
         startedAt: _now,
         hasTrustBadge: me.hasTrustBadge,
+        // 같은 체크인의 주제라 처음 고른 연령대·성별을 그대로 쓴다.
+        ageBand: first.ageBand,
+        gender: first.gender,
       ),
     );
     _rememberTopic(topic.trim(), category);
@@ -932,6 +971,8 @@ class DemoStore extends Notifier<DemoDb> {
           category: category,
           startedAt: t,
           hasTrustBadge: u.hasTrustBadge,
+          ageBand: u.ageBand,
+          gender: u.gender,
         ),
       );
       // 알림은 1번만
@@ -1214,11 +1255,7 @@ class DemoStore extends Notifier<DemoDb> {
       if (uid == null) return;
       ref
           .read(requestRepositoryProvider)
-          .sendMessage(
-            chatId: chatId,
-            uid: uid,
-            text: text.trim(),
-          )
+          .sendMessage(chatId: chatId, uid: uid, text: text.trim())
           .catchError((Object e) {
             debugPrint('[BIND] 메시지 전송 실패: $e');
             _notice('메시지를 보내지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -1414,6 +1451,8 @@ class DemoStore extends Notifier<DemoDb> {
     );
     _db.unread.remove(chatId);
     _syncGroupCount(_db.chats[i]);
+    // 남은 사람에게 "○○님이 나갔습니다"(실제 모드는 서버 leaveGroupChat이 쓴다)
+    if (!_live) _appendNotice(chatId, DemoDb.myUid, MessageKind.leave);
     _commit({DemoPart.chats, DemoPart.checkins});
     _liveWrite(
       (_) => ref.read(requestRepositoryProvider).leaveGroupChat(chatId),

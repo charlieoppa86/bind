@@ -45,8 +45,14 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
   /// US-025 이 카드로 그룹 채팅도 열지
   final _openGroupChat = ValueNotifier<bool>(false);
 
+  /// 연령대·성별(필수). 지난 체크인 때 고른 값을 미리 채운다.
+  late final _ageBand = ValueNotifier<AgeBand?>(ref.read(meProvider)?.ageBand);
+  late final _gender = ValueNotifier<Gender?>(ref.read(meProvider)?.gender);
+
   @override
   void dispose() {
+    _ageBand.dispose();
+    _gender.dispose();
     _openGroupChat.dispose();
     _keywordCustom.dispose();
     _keywordCustomFocus.dispose();
@@ -75,7 +81,9 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
       _topic.text.trim().isNotEmpty &&
       _category.value != null &&
       (_category.value != TopicCategory.other ||
-          _keywordCustom.text.trim().isNotEmpty);
+          _keywordCustom.text.trim().isNotEmpty) &&
+      _ageBand.value != null &&
+      _gender.value != null;
 
   void _submit() {
     HapticFeedback.mediumImpact();
@@ -87,6 +95,8 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
           category: _category.value!,
           categoryCustom: _keywordCustom.text,
           openGroupChat: _openGroupChat.value,
+          ageBand: _ageBand.value!,
+          gender: _gender.value!,
         );
     context.go(Routes.spot);
   }
@@ -137,6 +147,20 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
 
+                // ── 대화 방식(장소와 주제 사이) ──
+                const _Label('대화 방식'),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _openGroupChat,
+                  builder: (_, on, _) => _GroupChatOption(
+                    value: on,
+                    onChanged: (v) {
+                      HapticFeedback.selectionClick();
+                      _openGroupChat.value = v;
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+
                 // ── 주제 ──
                 const _Label('주제'),
                 ValueListenableBuilder<TopicCategory?>(
@@ -167,19 +191,25 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
                     customFocus: _keywordCustomFocus,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.lg),
 
-                // ── 대화 방식 ──
-                const _Label('대화 방식'),
-                ValueListenableBuilder<bool>(
-                  valueListenable: _openGroupChat,
-                  builder: (_, on, _) => _GroupChatOption(
-                    value: on,
-                    onChanged: (v) {
-                      HapticFeedback.selectionClick();
-                      _openGroupChat.value = v;
-                    },
-                  ),
+                // ── 연령대·성별(필수, 카드에 보임) ──
+                const _Label('연령대 · 성별'),
+                _ChoiceRow<AgeBand>(
+                  values: AgeBand.values,
+                  selected: _ageBand,
+                  label: (a) => a.label,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _ChoiceRow<Gender>(
+                  values: Gender.values,
+                  selected: _gender,
+                  label: (g) => g.label,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                const Text(
+                  '같은 장소 사람들이 보는 내 카드에 함께 보여요. 다음 체크인 때 그대로 채워 둘게요.',
+                  style: AppTypography.caption,
                 ),
               ],
             ),
@@ -191,6 +221,8 @@ class _SpotSelectScreenState extends ConsumerState<SpotSelectScreen> {
                 _topic,
                 _category,
                 _keywordCustom,
+                _ageBand,
+                _gender,
               ]),
               builder: (_, _) => FilledButton(
                 onPressed: _valid ? _submit : null,
@@ -557,6 +589,39 @@ class _QuickPickChip extends ConsumerWidget {
       compact: true,
       selected: false,
       onTap: () => onPick(spot.toPlace()),
+    );
+  }
+}
+
+/// 한 줄 단일 선택(연령대·성별). 고른 칩만 다시 그린다.
+class _ChoiceRow<T> extends StatelessWidget {
+  const _ChoiceRow({
+    required this.values,
+    required this.selected,
+    required this.label,
+  });
+
+  final List<T> values;
+  final ValueNotifier<T?> selected;
+  final String Function(T) label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<T?>(
+      valueListenable: selected,
+      builder: (_, value, _) => Wrap(
+        spacing: AppSpacing.xs + 2,
+        runSpacing: AppSpacing.xs + 2,
+        children: [
+          for (final v in values)
+            SelectChip(
+              label: label(v),
+              compact: true,
+              selected: value == v,
+              onTap: () => selected.value = v,
+            ),
+        ],
+      ),
     );
   }
 }
