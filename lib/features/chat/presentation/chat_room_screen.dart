@@ -269,24 +269,57 @@ class _MessageList extends ConsumerWidget {
         final prev = index > 0 ? messages[index - 1] : null;
         final next = index < messages.length - 1 ? messages[index + 1] : null;
         final newDay = prev == null || !_sameDay(prev.sentAt, m.sentAt);
+        // 입장·퇴장 안내는 말풍선 묶음을 끊는다.
         final showTime =
             next == null ||
+            next.kind.isNotice ||
             next.senderUid != m.senderUid ||
             next.sentAt.difference(m.sentAt).inMinutes >= 1;
         return Column(
           key: ValueKey(m.id),
           children: [
             if (newDay) _DaySeparator(m.sentAt),
-            _Bubble(
-              message: m,
-              mine: m.senderUid == DemoDb.myUid,
-              showTime: showTime,
-              grouped: prev != null && prev.senderUid == m.senderUid && !newDay,
-              showSender: group,
-            ),
+            if (m.kind.isNotice)
+              _NoticeLine(m.text)
+            else
+              _Bubble(
+                message: m,
+                mine: m.senderUid == DemoDb.myUid,
+                showTime: showTime,
+                grouped:
+                    prev != null &&
+                    !prev.kind.isNotice &&
+                    prev.senderUid == m.senderUid &&
+                    !newDay,
+                showSender: group,
+              ),
           ],
         );
       },
+    );
+  }
+}
+
+/// 그룹 채팅 입장·퇴장 안내 "○○님이 입장했습니다"(가운데 작은 글씨)
+class _NoticeLine extends StatelessWidget {
+  const _NoticeLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Center(
+        child: Text(
+          text,
+          style: AppTypography.caption.copyWith(
+            fontSize: 12,
+            color: AppColors.tertiary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

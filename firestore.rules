@@ -24,7 +24,15 @@ service cloud.firestore {
     // 클라이언트가 쓸 수 있는 users 필드
     function clientKeys() {
       return ['nickname', 'nicknameKey', 'jobTag', 'jobCustom', 'consentedAt',
-              'onboardingGuideSeen', 'createdAt', 'pushTopics'];
+              'onboardingGuideSeen', 'createdAt', 'pushTopics', 'ageBand', 'gender'];
+    }
+
+    // 연령대·성별(체크인 때 고름, 카드와 프로필에 보인다). 이전 앱은 보내지 않아 없어도 된다.
+    function validDemographics(data) {
+      return (data.get('ageBand', null) == null
+              || data.ageBand in ['twenties', 'thirties', 'forties', 'fiftiesPlus'])
+        && (data.get('gender', null) == null
+              || data.gender in ['male', 'female']);
     }
 
     function validProfile(data) {
@@ -36,7 +44,8 @@ service cloud.firestore {
             || (data.jobCustom is string && data.jobCustom.size() <= 10))
         // 푸시 공개 토픽 구독(설정 화면)
         && (data.get('pushTopics', null) == null
-            || (data.pushTopics is list && data.pushTopics.size() <= 10));
+            || (data.pushTopics is list && data.pushTopics.size() <= 10))
+        && validDemographics(data);
     }
 
     // 닉네임 예약 문서를 이 요청(배치·트랜잭션) 안에서 내 것으로 갖고 있는지
@@ -137,7 +146,9 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['uid', 'spotId', 'nickname',
              'jobTag', 'jobCustom', 'topic', 'category', 'categoryCustom', 'startedAt',
-             'checkedOutAt', 'hasTrustBadge', 'notifyWhenSomeoneArrives', 'openGroupChat'])
+             'checkedOutAt', 'hasTrustBadge', 'notifyWhenSomeoneArrives', 'openGroupChat',
+             'ageBand', 'gender'])
+        && validDemographics(request.resource.data)
         // US-025 그룹 채팅도 열기. 방(groupChatId)과 인원(groupMemberCount)은 서버만 쓴다.
         && request.resource.data.get('openGroupChat', false) is bool
         && request.resource.data.uid == request.auth.uid

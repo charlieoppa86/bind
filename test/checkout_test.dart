@@ -27,6 +27,8 @@ void main() {
         place: DemoSeed.places[0],
         topic: 't',
         category: TopicCategory.dev,
+        ageBand: AgeBand.thirties,
+        gender: Gender.female,
       );
     await tester.pumpAndSettle();
     container.read(routerProvider).go(Routes.my);

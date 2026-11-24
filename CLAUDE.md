@@ -33,7 +33,8 @@ dart run flutter_launcher_icons                   # 앱 아이콘 다시 생성(
 - Flutter 3.50 / Dart 3.14. Material은 `package:material_ui/material_ui.dart`로 import한다.
 - 상태관리: flutter_riverpod 3 (`Notifier` / `NotifierProvider`)
 - 라우팅: go_router, 하단 탭 4개(체크인·채팅·요청·마이페이지)는 `StatefulShellRoute.indexedStack`
-- 백엔드: Firebase(Auth, Firestore, Cloud Functions, FCM, Analytics, App Check). 서버 직접 구축 금지.
+- 백엔드: Firebase(Auth, Firestore, Cloud Functions, FCM, Analytics, App Check, Crashlytics). 서버 직접 구축 금지.
+- **Crashlytics**는 `firebase_bootstrap.dart`가 Firebase 초기화에 성공했을 때만 켠다(출시 빌드만 수집, 데모 모드·테스트는 영향 없음). iOS dSYM은 Runner의 "Upload Crashlytics Symbols" 빌드 단계(SPM 체크아웃의 `firebase-ios-sdk/Crashlytics/run`), Android R8 매핑은 Crashlytics Gradle 플러그인이 올린다.
 - Firebase iOS SDK는 SPM으로 받는다(`pubspec.yaml`의 `enable-swift-package-manager`).
 
 ## 폴더 구조
@@ -74,7 +75,9 @@ dart run flutter_launcher_icons                   # 앱 아이콘 다시 생성(
 - **아이폰·아이패드 모두 지원, 세로 고정**(iPad는 `UIRequiresFullScreen`, 멀티태스킹 미지원). 레이아웃 기준 기기는 iPad Air 11"(M4, 820pt)·iPad Pro 13"(M4, 1032pt). 넓은 화면에서는 `ContentWidthFrame`(lib/app/)이 앱 전체를 `AppSpacing.maxContentWidth`(640) 가운데 열로 모으므로 화면마다 따로 너비를 제한하지 않는다. `test/app_flow_test.dart`가 폰·두 아이패드 크기로 전체 흐름을 돈다.
 - 앱은 **다크 모드 기본**이다(`AppColors` 값이 다크 팔레트). `heading`을 배경으로 쓰지 말고 띄울 면은 `elevated`를 쓴다. 자세한 값은 docs/DESIGN.md "다크 모드 기본".
 - **채팅은 두 종류**(`ChatType`, 화면 이름 "1:1 채팅" / "그룹 채팅", 2026-11-23 결정, US-025). 1:1은 요청 수락으로, 그룹은 체크인할 때 "그룹 채팅도 열기"로 열린다(최대 `AppLimits.groupChatMaxMembers`). 성사 대화(NSM)와 대화 평가는 1:1만. 1:1 전용 로직(`Chat.otherUid`, `chatWith`, 평가)을 그룹 방에 쓰지 않는다. **대화방 보관 기간 제한은 없다**(2026-11-23 결정, 채팅방·메시지·평가 TTL 해제, 신고만 1년 TTL).
-- 연애·만남 키워드는 영구 제외(US-W08). 키워드는 24개(`TopicCategory`, 이름은 Firestore에 저장되므로 바꾸지 않는다)이고 기타는 직접 입력(`Checkin.categoryCustom`).
+- 연애·만남 키워드는 영구 제외(US-W08). 키워드는 35개, 묶음은 커리어 12 · 일상 12 · 스터디 11(`KeywordGroup`, 2026-11-23, `test/keywords_test.dart`가 묶음마다 10~12개와 예시 주제를 검사). `TopicCategory` 이름은 Firestore에 저장되므로 바꾸지 않는다(라벨·묶음은 바꿔도 됨). 기타(일상 맨 끝)는 직접 입력(`Checkin.categoryCustom`). 체크인 화면 순서는 장소 → 대화 방식 → 주제 → 키워드 → 연령대·성별.
+- **연령대·성별**(`AgeBand`·`Gender`, 2026-11-25)은 체크인 때 필수로 고르고 카드에 보인다(`Checkin.profileLabel`). 고른 값은 프로필(`users/{uid}.ageBand`·`gender`)에 남겨 다음 체크인에 미리 채운다. 이전 앱은 보내지 않으므로 규칙·모델은 없어도 받는다.
+- **그룹 채팅 입장·퇴장 안내**는 `MessageKind.join/leave` 메시지로 서버(`joinGroupChat`/`leaveGroupChat`)만 쓴다(클라이언트는 `kind`를 못 씀). 안 읽은 수·성사 대화에 넣지 않고, 입장만 다른 참여자에게 푸시. 채팅 사진 전송은 하지 않는다(US-W04 유지).
 - **위치(GPS)·PIN·체류 시간 제한은 없다**(2026-11-16 결정). 체크인은 한 화면에서 장소를 검색해 고르고 주제 한 줄을 올리면 끝난다. 체크아웃할 때까지 카드가 보인다.
 - 장소는 **카카오 로컬 키워드 장소 검색**으로 고른다(2026-11-16 결정, 우편번호 서비스는 가게 이름 검색이 안 돼서 제외). 같은 장소 판정은 카카오 장소 ID(`Spot.placeId`, Firestore `spots/{placeId}`)로 한다.
 - 카카오 REST 키는 앱에 넣지 않는다. 검색은 Cloud Functions `searchPlaces`(Secret `KAKAO_REST_API_KEY`)가 대신 호출한다. 앱은 `placeSearchProvider`(lib/data/place/place_search.dart)만 쓴다.

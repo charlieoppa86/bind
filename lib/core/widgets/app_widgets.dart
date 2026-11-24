@@ -296,9 +296,11 @@ class TrustBadge extends StatelessWidget {
           const SizedBox(width: 3),
           Text(
             '좋았어요 ${AppLimits.trustBadgeThreshold}+',
+            // 닉네임 줄(22) 안에 들어가게 줄 높이를 좁힌다(카드 높이가 배지로 늘지 않게).
             style: AppTypography.caption.copyWith(
               color: AppColors.body,
               fontSize: 11,
+              height: 1.2,
             ),
           ),
         ],

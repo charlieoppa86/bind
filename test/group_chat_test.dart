@@ -44,22 +44,46 @@ void main() {
     }
     await tester.tap(find.text('성수 워크라운지').last);
     await tester.pump();
-    await tester.tap(find.text('개발').first);
-    await tester.enterText(find.byType(TextField).last, topic);
-    await tester.pump();
-    // 키워드 아래 "대화 방식"까지 내려 본다(지연 생성 목록)
-    await tester.dragUntilVisible(
-      find.text('$group도 열기'),
-      find.byType(ListView).first,
-      const Offset(0, -200),
+    // 대화 방식은 장소 바로 아래(주제 위)에 있다.
+    expect(find.text('$group도 열기'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('$group도 열기')).dy,
+      lessThan(tester.getTopLeft(find.text('주제')).dy),
     );
-    await tester.pumpAndSettle();
     expect(find.text('끄면 1:1 채팅 요청만 받아요.'), findsOneWidget);
     if (openGroup) {
       await tester.tap(find.byType(Switch));
       await tester.pump();
       expect(find.textContaining('요청 없이 바로 들어와'), findsOneWidget);
     }
+    await tester.enterText(find.byType(TextField).last, topic);
+    await tester.pump();
+    // 키워드는 아래에 있어 내려서 고른다(지연 생성 목록)
+    await tester.dragUntilVisible(
+      find.text('개발'),
+      find.byType(ListView).first,
+      const Offset(0, -200),
+    );
+    await tester.tap(find.text('개발').first);
+    await tester.pump();
+    // 연령대·성별을 고르기 전에는 체크인할 수 없다(필수).
+    FilledButton checkInButton() => tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.text('체크인하기'),
+        matching: find.byWidgetPredicate((w) => w is FilledButton),
+      ),
+    );
+    expect(checkInButton().onPressed, isNull);
+    // 연령대·성별(필수)도 아래에 있어 내려서 고른다.
+    await tester.dragUntilVisible(
+      find.text('여성'),
+      find.byType(ListView).first,
+      const Offset(0, -200),
+    );
+    await tester.tap(find.text('30대'));
+    await tester.tap(find.text('여성'));
+    await tester.pump();
+    expect(checkInButton().onPressed, isNotNull);
     await tester.tap(find.text('체크인하기'));
     await tester.pumpAndSettle();
   }
@@ -72,7 +96,7 @@ void main() {
     // 내 체크인: 연 그룹 채팅과 인원
     await tester.tap(find.text('체크인 관리'));
     await tester.pumpAndSettle();
-    expect(find.text('$group · 1/$max명 · 참여 중'), findsOneWidget);
+    expect(find.text('$group · $max명 중 1명 대화 중 · 참여 중'), findsOneWidget);
     expect(find.text('들어가기'), findsOneWidget);
     router.pop();
     await tester.pumpAndSettle();
@@ -95,6 +119,8 @@ void main() {
     expect(find.text('$group · 2명'), findsOneWidget);
     expect(find.text('체크인한 주제로 $group이 열렸어요'), findsOneWidget);
     expect(find.text('민서디자인'), findsOneWidget);
+    // 입장 안내가 방 안에 작게 보인다
+    expect(find.text('민서디자인님이 입장했습니다'), findsOneWidget);
     expect(find.text(DemoSeed.groupJoiners.first.$2), findsOneWidget);
 
     // 내가 보내면 남은 사람이 답한다. 나갈 때 평가는 묻지 않는다.
@@ -126,7 +152,8 @@ void main() {
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
-    expect(find.text('$group · 3/$max명'), findsOneWidget);
+    expect(find.text('$group · $max명 중 3명 대화 중'), findsOneWidget);
+    expect(max, 20); // 그룹 채팅은 최대 20명
 
     // 시트: 그룹 참여 + 1:1 요청을 고를 수 있다
     await tester.tap(find.text(topic));
@@ -141,6 +168,7 @@ void main() {
     expect(find.text('$group · 4명'), findsOneWidget);
     expect(find.text('사이드 프로젝트 하시는 분들 편하게 얘기해요!'), findsOneWidget);
     expect(find.text('하나'), findsOneWidget); // 보낸 사람 이름
+    expect(find.text('지후님이 입장했습니다'), findsOneWidget); // 내 입장 안내
     await tester.pump(DemoSeed.replyDelay);
     await tester.pumpAndSettle();
     expect(find.text(DemoSeed.groupWelcome), findsOneWidget);

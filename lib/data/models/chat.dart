@@ -91,13 +91,32 @@ class Chat {
       memberUids.firstWhere((u) => u != myUid, orElse: () => '');
 }
 
-/// `chats/{chatId}/messages/{messageId}` — 텍스트만(US-W04).
+/// 메시지 종류. 이름(name)은 Firestore `kind`에 저장되므로 바꾸지 않는다.
+enum MessageKind {
+  /// 이용자가 보낸 글
+  text,
+
+  /// 그룹 채팅 안내 "○○님이 입장했습니다"(서버가 쓴다)
+  join,
+
+  /// 그룹 채팅 안내 "○○님이 나갔습니다"(서버가 쓴다)
+  leave;
+
+  bool get isNotice => this != text;
+}
+
+/// `chats/{chatId}/messages/{messageId}` — 텍스트만(US-W04, 사진 전송 없음).
+///
+/// 그룹 채팅의 입장·퇴장 안내도 같은 컬렉션에 [MessageKind.join]/[MessageKind.leave]로
+/// 들어간다. 안내의 [senderUid]는 들어오거나 나간 사람, [text]는 화면에 보일 문장이다
+/// (그 사람이 탈퇴하면 안내도 함께 지워진다).
 class ChatMessage {
   const ChatMessage({
     required this.id,
     required this.senderUid,
     required this.text,
     required this.sentAt,
+    this.kind = MessageKind.text,
   });
 
   factory ChatMessage.fromMap(String id, Map<String, dynamic> map) =>
@@ -106,12 +125,21 @@ class ChatMessage {
         senderUid: map['senderUid'] as String? ?? '',
         text: map['text'] as String? ?? '',
         sentAt: toDateTime(map['sentAt']) ?? DateTime.now(),
+        kind: enumByName(MessageKind.values, map['kind'], MessageKind.text),
       );
 
   final String id;
   final String senderUid;
   final String text;
   final DateTime sentAt;
+  final MessageKind kind;
+
+  /// "○○님이 입장했습니다" / "○○님이 나갔습니다"
+  static String noticeText(MessageKind kind, String nickname) => switch (kind) {
+    MessageKind.join => '$nickname님이 입장했습니다',
+    MessageKind.leave => '$nickname님이 나갔습니다',
+    MessageKind.text => '',
+  };
 
   Map<String, dynamic> toMap() => {
     'senderUid': senderUid,

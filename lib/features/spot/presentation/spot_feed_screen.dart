@@ -183,7 +183,7 @@ class _FeedSlivers extends ConsumerWidget {
   }
 }
 
-/// 다른 사람의 주제 카드: 닉네임·직무·주제만(US-006)
+/// 다른 사람의 주제 카드: 닉네임·하는 일·연령대·성별·주제·키워드(US-006)
 ///
 /// 카드 본문은 체크인이 바뀔 때만, 오른쪽 아래 상태(대화 요청/대기/대화 중)는
 /// 그 사람과의 요청·대화가 바뀔 때만 다시 그린다.
@@ -197,12 +197,14 @@ class TopicCard extends StatelessWidget {
     final c = checkin;
     return _CardTapTarget(
       uid: c.uid,
+      // 카드 높이는 상태(대화 요청/수락 대기 중/대화 중)와 상관없이 같다(2026-11-25,
+      // 이전보다 약 15% 낮춤: 위아래 여백·줄 간격·상태 높이를 줄였다).
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
-          AppSpacing.md,
+          AppSpacing.sm + 2,
           AppSpacing.xs,
-          AppSpacing.lg,
+          AppSpacing.sm + 2,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,26 +232,38 @@ class TopicCard extends StatelessWidget {
                           ],
                         ],
                       ),
-                      Text(c.jobLabel, style: AppTypography.caption),
+                      // 한 줄로(카드 높이를 맞추려고). 넘치면 끝(하는 일)이 줄어든다.
+                      Text(
+                        c.profileLabel,
+                        style: AppTypography.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
                 SafetyMenuButton(targetUid: c.uid, source: ReportSource.feed),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm + 2),
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.md),
               child: Text(
                 c.topic,
                 style: AppTypography.title.copyWith(fontSize: 18, height: 1.45),
+                // 영문·숫자가 섞여도 줄 높이가 늘지 않게 고정한다(카드 높이를 맞추려고).
+                strutStyle: const StrutStyle(
+                  fontSize: 18,
+                  height: 1.45,
+                  forceStrutHeight: true,
+                ),
               ),
             ),
             if (c.groupChatId case final groupId?) ...[
               const SizedBox(height: AppSpacing.sm),
               GroupChatBadge(chatId: groupId, count: c.groupMemberCount),
             ],
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm + 2),
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.md),
               child: Row(
@@ -279,7 +293,12 @@ class TopicCard extends StatelessWidget {
   }
 }
 
-/// 카드에 열린 그룹 채팅 표시: "그룹 채팅 · 3/8명" (참여 중이면 "참여 중")
+/// "그룹 채팅 · 20명 중 3명 대화 중" — 최대 인원 중 지금 방에 있는 사람 수
+String groupChatStatusText({required int count, bool joined = false}) =>
+    '${ChatType.group.label} · ${AppLimits.groupChatMaxMembers}명 중 $count명 대화 중'
+    '${joined ? ' · 참여 중' : ''}';
+
+/// 카드에 열린 그룹 채팅 표시: "그룹 채팅 · 20명 중 3명 대화 중"(참여 중이면 "· 참여 중")
 class GroupChatBadge extends ConsumerWidget {
   const GroupChatBadge({required this.chatId, required this.count, super.key});
 
@@ -296,8 +315,7 @@ class GroupChatBadge extends ConsumerWidget {
         // 좁은 곳(내 체크인의 버튼 옆)에서는 줄을 바꾼다.
         Flexible(
           child: Text(
-            '${ChatType.group.label} · $count/${AppLimits.groupChatMaxMembers}명'
-            '${joined ? ' · 참여 중' : ''}',
+            groupChatStatusText(count: count, joined: joined),
             style: AppTypography.caption.copyWith(
               color: AppColors.primary,
               fontWeight: FontWeight.w600,
@@ -331,18 +349,30 @@ class _CardTapTarget extends ConsumerWidget {
   }
 }
 
+/// 카드 오른쪽 아래 상태. 어떤 상태든 같은 높이라 카드 높이가 바뀌지 않는다.
 class _CardStatus extends ConsumerWidget {
   const _CardStatus(this.uid);
 
   final String uid;
 
+  /// 상태 영역 높이(대화 요청 버튼 높이와 같다)
+  static const height = 30.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inChat = ref.watch(chatIdWithProvider(uid)) != null;
-    if (inChat) return const StatusPill('대화 중', tone: PillTone.active);
-    final pending = ref.watch(pendingToProvider(uid).select((r) => r != null));
-    if (pending) return const StatusPill('수락 대기 중');
-    return const _RequestButton();
+    final pending =
+        !inChat && ref.watch(pendingToProvider(uid).select((r) => r != null));
+    return SizedBox(
+      height: height,
+      child: Center(
+        child: inChat
+            ? const StatusPill('대화 중', tone: PillTone.active)
+            : pending
+            ? const StatusPill('수락 대기 중')
+            : const _RequestButton(),
+      ),
+    );
   }
 }
 
@@ -352,10 +382,9 @@ class _RequestButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 7,
-      ),
+      height: _CardStatus.height,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.primarySoft,
         borderRadius: BorderRadius.circular(AppRadius.control),

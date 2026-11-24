@@ -116,7 +116,7 @@ class MyCheckinScreen extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${c.nickname} · ${c.jobLabel} · ${c.keywordLabel}',
+                                  '${c.nickname} · ${c.profileLabel} · ${c.keywordLabel}',
                                   style: AppTypography.caption,
                                 ),
                                 const SizedBox(height: 4),
@@ -184,7 +184,7 @@ class MyCheckinScreen extends ConsumerWidget {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: AppSpacing.page),
                   child: Text(
-                    '같은 장소 사람들에게는 닉네임·하는 일·주제만 보여요.',
+                    '같은 장소 사람들에게는 닉네임·하는 일·연령대·성별·주제가 보여요.',
                     style: AppTypography.caption,
                   ),
                 ),

@@ -36,8 +36,24 @@ void main() {
     await tester.pump();
     expect(find.textContaining('처음으로 체크인해요'), findsOneWidget);
 
-    await tester.tap(find.text('개발').first);
+    // 장소 → 대화 방식 → 주제 → 키워드 순서. 키워드는 아래에 있어 내려서 고른다.
     await tester.enterText(find.byType(TextField).last, '루프탑에서 개발 얘기해요');
+    await tester.pump();
+    await tester.dragUntilVisible(
+      find.text('개발'),
+      find.byType(ListView).first,
+      const Offset(0, -200),
+    );
+    await tester.tap(find.text('개발').first);
+    await tester.pump();
+    // 연령대·성별(필수)도 아래에 있어 내려서 고른다.
+    await tester.dragUntilVisible(
+      find.text('여성'),
+      find.byType(ListView).first,
+      const Offset(0, -200),
+    );
+    await tester.tap(find.text('30대'));
+    await tester.tap(find.text('여성'));
     await tester.pump();
     await tester.tap(find.text('체크인하기'));
     await tester.pumpAndSettle();
