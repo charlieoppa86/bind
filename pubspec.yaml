@@ -1,7 +1,7 @@
 name: bind_app
 description: "BIND - 지금 여기, 같은 주제의 사람과 바로 대화"
 publish_to: 'none'
-version: 0.1.0+2
+version: 0.1.1+4
 
 environment:
   sdk: ^3.14.0
